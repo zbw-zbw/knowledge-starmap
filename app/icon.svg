@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#0a1228"/>
+      <stop offset="100%" stop-color="#050816"/>
+    </radialGradient>
+    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="100%" stop-color="#29b6f6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bgGrad)"/>
+  <g transform="translate(32 32)" filter="url(#glow)">
+    <!-- Connection lines -->
+    <line x1="0" y1="0" x2="15" y2="-11" stroke="#4fc3f7" stroke-width="1.2" opacity="0.35"/>
+    <line x1="0" y1="0" x2="-13" y2="9" stroke="#4fc3f7" stroke-width="1.2" opacity="0.3"/>
+    <line x1="0" y1="0" x2="11" y2="14" stroke="#4fc3f7" stroke-width="1.2" opacity="0.3"/>
+    <line x1="0" y1="0" x2="-14" y2="-12" stroke="#4fc3f7" stroke-width="1" opacity="0.25"/>
+    <!-- Central star node -->
+    <circle cx="0" cy="0" r="6" fill="url(#starGrad)" opacity="0.95"/>
+    <circle cx="0" cy="0" r="6" fill="none" stroke="#4fc3f7" stroke-width="1" opacity="0.5">
+      <animate attributeName="r" values="6;12;6" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.5;0;0.5" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <!-- Satellite nodes -->
+    <circle cx="15" cy="-11" r="3.5" fill="#ab47bc" opacity="0.85"/>
+    <circle cx="-13" cy="9" r="3" fill="#66bb6a" opacity="0.85"/>
+    <circle cx="11" cy="14" r="2.8" fill="#ffb74d" opacity="0.85"/>
+    <circle cx="-14" cy="-12" r="2.2" fill="#4fc3f7" opacity="0.7"/>
+  </g>
+</svg>
