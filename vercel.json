@@ -1,8 +1,5 @@
 {
   "framework": "nextjs",
   "buildCommand": "pnpm build",
-  "installCommand": "pnpm install",
-  "env": {
-    "DEEPSEEK_API_KEY": "@deepseek-api-key"
-  }
+  "installCommand": "pnpm install"
 }
