@@ -1,6 +1,7 @@
 // 设计 Token 与全局常量
 
 import type { SimulationConfig } from "./types";
+import type { IconName } from "@/components/ui/Icons";
 
 // 品牌信息
 export const SITE = {
@@ -8,8 +9,7 @@ export const SITE = {
   tagline: "让你的知识像星空一样可见 · 可探索 · 可连接",
   description:
     "AI 驱动的个人知识图谱可视化工具 —— 把你学过的每一个概念连成星座，在星空下探索知识宇宙。",
-  contest: "TRAE AI 创造力大赛 · 学习工作赛道 · 2026",
-  builtWith: "使用 TRAE IDE + TRAE Work 构建",
+  builtWith: "使用 Next.js + DeepSeek AI 构建",
 } as const;
 
 // 颜色 Token（与 tailwind.config.ts 保持一致，供 JS 侧使用）
@@ -43,17 +43,17 @@ export const NAV_LINKS = [
 // 痛点数据
 export const PAIN_POINTS = [
   {
-    icon: "📚",
+    icon: "scatter" as IconName,
     title: "散落各处",
     desc: "笔记在 Notion，收藏在浏览器，灵感在备忘录，知识碎片散落 4-5 个工具。",
   },
   {
-    icon: "🔗",
+    icon: "unlink" as IconName,
     title: "互不关联",
     desc: "你学了 React 也学了设计模式，却不知道它们底层共享相同原则。",
   },
   {
-    icon: "🔍",
+    icon: "searchOff" as IconName,
     title: "找不回来",
     desc: "收藏了 100 篇文章，需要时永远找不到那篇。",
   },
@@ -62,25 +62,25 @@ export const PAIN_POINTS = [
 // 核心功能数据
 export const FEATURES = [
   {
-    icon: "📥",
+    icon: "import" as IconName,
     title: "智能导入",
     color: "blue",
     desc: "粘贴笔记、文章或 Markdown，AI 自动提取概念和关系，零手动整理。",
   },
   {
-    icon: "✨",
+    icon: "discover" as IconName,
     title: "星图可视化",
     color: "white",
     desc: "力导向图谱，节点是概念，连线是关系，颜色是领域。拖拽、缩放、探索。",
   },
   {
-    icon: "🔗",
+    icon: "link" as IconName,
     title: "关联发现",
     color: "orange",
     desc: "AI 主动发现“你可能没注意到的知识关联”，打破信息孤岛。",
   },
   {
-    icon: "📖",
+    icon: "book" as IconName,
     title: "知识探索",
     color: "green",
     desc: "点击节点展开知识卡片，查看来源、摘要、相关概念。",

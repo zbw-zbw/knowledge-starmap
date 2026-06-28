@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SparkleIcon } from "@/components/ui/Icons";
 
 interface ImportProgressProps {
   isVisible: boolean;
@@ -14,7 +15,7 @@ const STATUS_MESSAGES = [
 ];
 
 /**
- * 导入进度组件：旋转星图图标 + 滚动状态文字。
+ * 导入进度组件：旋转环 + SVG 星图图标 + 滚动状态文字。
  * 覆盖在导入区域上方，半透明遮罩。
  */
 export default function ImportProgress({ isVisible }: ImportProgressProps) {
@@ -35,11 +36,10 @@ export default function ImportProgress({ isVisible }: ImportProgressProps) {
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-space-900/80 backdrop-blur-sm">
-      {/* 旋转星图图标 */}
       <div className="relative h-14 w-14">
         <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-node-blue border-r-node-blue/40" />
-        <div className="absolute inset-2 flex items-center justify-center text-2xl text-node-blue">
-          ✦
+        <div className="absolute inset-0 flex items-center justify-center">
+          <SparkleIcon size={24} className="text-node-blue" />
         </div>
       </div>
       <p className="mt-4 animate-pulse text-sm font-medium text-star-white">
@@ -49,3 +49,4 @@ export default function ImportProgress({ isVisible }: ImportProgressProps) {
     </div>
   );
 }
+

@@ -3,6 +3,17 @@
 import { useState } from "react";
 import type { Discovery, KnowledgeEdge } from "@/lib/types";
 import { COLORS } from "@/lib/constants";
+import {
+  DiscoverIcon,
+  LinkIcon,
+  LightbulbIcon,
+  GlobeIcon,
+  SparkleIcon,
+  WarningIcon,
+  CheckIcon,
+} from "@/components/ui/Icons";
+import type { IconProps } from "@/components/ui/Icons";
+import type { ComponentType } from "react";
 
 interface DiscoveryPanelProps {
   discoveries: Discovery[];
@@ -15,11 +26,13 @@ interface DiscoveryPanelProps {
   onHoverNodes: (nodeIds: string[] | null) => void;
 }
 
-const DISCOVERY_META = {
-  "hidden-link": { icon: "🔗", color: COLORS.node.orange },
-  "knowledge-gap": { icon: "💡", color: COLORS.node.purple },
-  cluster: { icon: "🌐", color: COLORS.node.blue },
-} as const;
+type IconComponent = ComponentType<IconProps>;
+
+const DISCOVERY_META: Record<Discovery["type"], { Icon: IconComponent; color: string }> = {
+  "hidden-link": { Icon: LinkIcon, color: COLORS.node.orange },
+  "knowledge-gap": { Icon: LightbulbIcon, color: COLORS.node.purple },
+  cluster: { Icon: GlobeIcon, color: COLORS.node.blue },
+};
 
 const TYPE_LABELS: Record<Discovery["type"], string> = {
   "hidden-link": "隐藏关联",
@@ -54,18 +67,20 @@ export default function DiscoveryPanel({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center gap-1.5">
+        <DiscoverIcon size={14} className="text-star-dim" />
         <h3 className="text-xs font-medium uppercase tracking-wider text-star-dim">
-          🔮 AI 关联发现
+          AI 关联发现
         </h3>
       </div>
 
       <button
         onClick={onDiscover}
         disabled={!canDiscover}
-        className="w-full rounded-xl bg-node-purple/80 px-4 py-2.5 text-sm font-medium text-star-white transition-all hover:bg-node-purple hover:shadow-[0_0_16px_rgba(171,71,188,0.4)] disabled:cursor-not-allowed disabled:bg-space-600 disabled:text-star-dim disabled:shadow-none"
+        className="group flex w-full items-center justify-center gap-2 rounded-xl bg-node-purple/80 px-4 py-2.5 text-sm font-medium text-star-white transition-all hover:bg-node-purple hover:shadow-[0_0_16px_rgba(171,71,188,0.4)] disabled:cursor-not-allowed disabled:bg-space-600 disabled:text-star-dim disabled:shadow-none"
       >
-        {isDiscovering ? "正在分析..." : "✦ 发现隐藏关联"}
+        <SparkleIcon size={16} />
+        {isDiscovering ? "正在分析..." : "发现隐藏关联"}
       </button>
 
       {nodeCount < 5 && !isDiscovering && (
@@ -76,8 +91,9 @@ export default function DiscoveryPanel({
 
       {/* 错误提示 */}
       {error && !isDiscovering && (
-        <div className="mt-2 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2">
-          <p className="text-xs text-red-300">⚠ {error}</p>
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2">
+          <WarningIcon size={14} className="shrink-0 text-red-400" />
+          <p className="text-xs text-red-300">{error}</p>
         </div>
       )}
 
@@ -116,7 +132,7 @@ export default function DiscoveryPanel({
               >
                 {/* 类型标签 + 标题 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-base">{meta.icon}</span>
+                  <meta.Icon size={16} className="shrink-0" style={{ color: meta.color }} />
                   <span
                     className="rounded px-1.5 py-0.5 text-xs font-medium"
                     style={{
@@ -160,9 +176,16 @@ export default function DiscoveryPanel({
                       <button
                         onClick={() => handleAdd(discovery)}
                         disabled={isAdded}
-                        className="rounded-lg bg-node-blue/20 px-2.5 py-1 text-xs font-medium text-node-blue transition-all hover:bg-node-blue/30 disabled:opacity-40"
+                        className="flex items-center gap-1 rounded-lg bg-node-blue/20 px-2.5 py-1 text-xs font-medium text-node-blue transition-all hover:bg-node-blue/30 disabled:opacity-40"
                       >
-                        {isAdded ? "已添加 ✓" : "添加关联"}
+                        {isAdded ? (
+                          <>
+                            已添加
+                            <CheckIcon size={12} />
+                          </>
+                        ) : (
+                          "添加关联"
+                        )}
                       </button>
                     )}
                   <button

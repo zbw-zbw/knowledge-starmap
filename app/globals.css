@@ -10,6 +10,26 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ---------------- 全局交互光标 ---------------- */
+button,
+a,
+[role="button"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="submit"],
+input[type="button"],
+label[for],
+summary,
+select,
+[data-clickable] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 body {
   background-color: #050816;
   background-image: linear-gradient(180deg, #050816 0%, #0a0e27 100%);

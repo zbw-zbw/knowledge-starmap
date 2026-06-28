@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
 import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
 import { SEARCH_DEBOUNCE } from "@/lib/constants";
+import { SearchIcon, CloseIcon } from "@/components/ui/Icons";
 
 interface SearchBarProps {
   graph: KnowledgeGraph;
@@ -85,8 +86,8 @@ export default function SearchBar({
     <div ref={containerRef} className="relative">
       {/* 搜索输入框 */}
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-star-dim">
-          🔍
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-star-dim">
+          <SearchIcon size={16} />
         </span>
         <input
           type="text"
@@ -99,10 +100,10 @@ export default function SearchBar({
         {hasQuery && (
           <button
             onClick={handleClear}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-star-dim transition-colors hover:text-star-white"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-star-dim transition-colors hover:text-star-white"
             aria-label="清除搜索"
           >
-            ✕
+            <CloseIcon size={14} />
           </button>
         )}
       </div>

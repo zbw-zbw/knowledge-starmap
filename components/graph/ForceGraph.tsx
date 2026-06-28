@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
 import { MAX_DPR, HIGHLIGHT_DURATION } from "@/lib/constants";
+import { PlusIcon, MinusIcon, ResetIcon } from "@/components/ui/Icons";
 import { useForceSimulation } from "./useForceSimulation";
 import { useGraphInteraction } from "./useGraphInteraction";
 import { renderGraph } from "./graphRenderer";
@@ -272,27 +273,25 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
         <div className="absolute bottom-20 right-4 flex flex-col gap-2 md:bottom-4">
           <button
             onClick={() => zoomBy(1.2, canvasSize.width, canvasSize.height)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-lg text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
             aria-label="放大"
           >
-            +
+            <PlusIcon size={18} />
           </button>
           <button
             onClick={() => zoomBy(1 / 1.2, canvasSize.width, canvasSize.height)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-lg text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
             aria-label="缩小"
           >
-
-            −
+            <MinusIcon size={18} />
           </button>
           <button
             onClick={handleReset}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-sm text-star-dim backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 hover:text-star-white active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-dim backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 hover:text-star-white active:scale-95"
             aria-label="重置视图"
             title="重置视图"
           >
-
-            ⟲
+            <ResetIcon size={16} />
           </button>
         </div>
       </div>

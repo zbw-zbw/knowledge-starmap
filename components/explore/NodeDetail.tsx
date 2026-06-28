@@ -4,6 +4,14 @@ import { useMemo } from "react";
 import { createPortal } from "react-dom";
 import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
 import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
+import {
+  ArrowLeftIcon,
+  CloseIcon,
+  NoteIcon,
+  LinkIcon,
+  ChartIcon,
+  ArrowRightIcon,
+} from "@/components/ui/Icons";
 
 interface NodeDetailProps {
   node: KnowledgeNode | null;
@@ -56,7 +64,6 @@ export default function NodeDetail({
     if (!node) return null;
     const directCount = related.length;
 
-    // 平均关联数
     const allDegree = graph.edges.reduce(
       (acc, e) => {
         acc[e.source] = (acc[e.source] || 0) + 1;
@@ -71,7 +78,6 @@ export default function NodeDetail({
     const strengthRatio = avgDegree > 0 ? directCount / avgDegree : 0;
     const strengthPct = Math.min(100, Math.round(strengthRatio * 50));
 
-    // 核心度：该节点在所属 group 内的边数占比
     const groupNodes = graph.nodes.filter((n) => n.group === node.group);
     const groupNodeIds = new Set(groupNodes.map((n) => n.id));
     const groupEdges = graph.edges.filter(
@@ -88,7 +94,6 @@ export default function NodeDetail({
     return { directCount, strengthPct, coreness };
   }, [node, graph, related]);
 
-  // node 为 null 时不渲染；SSR 安全检查
   if (!node || typeof document === "undefined") return null;
 
   const color = GROUP_COLORS[node.group];
@@ -101,27 +106,28 @@ export default function NodeDetail({
         onClick={onClose}
       />
 
-      {/* 详情面板 — 通过 portal 渲染到 body，脱离 stacking context */}
+      {/* 详情面板 */}
       <aside
-             className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl border-t border-space-500 bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:bottom-auto md:left-auto md:top-14 md:right-0 md:h-[calc(100vh-3.5rem)] md:w-[360px] md:rounded-none md:border-l md:border-t-0"
-             style={{
-               animation: "slideInRight 300ms ease-out",
-             }}
-           >
+        className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:bottom-auto md:left-auto md:top-14 md:right-0 md:h-[calc(100vh-3.5rem)] md:w-[360px] md:rounded-none"
+        style={{
+          animation: "slideInRight 300ms ease-out",
+        }}
+      >
         {/* 顶部栏 */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-space-500/60 bg-space-800/95 px-5 py-4 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-space-800/95 px-5 py-4 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="text-sm text-star-dim transition-colors hover:text-star-white"
+            className="flex items-center gap-1 text-sm text-star-dim transition-colors hover:text-star-white"
           >
-            ← 返回
+            <ArrowLeftIcon size={16} />
+            返回
           </button>
           <button
             onClick={onClose}
             className="text-star-dim transition-colors hover:text-star-white"
             aria-label="关闭"
           >
-            ✕
+            <CloseIcon size={16} />
           </button>
         </div>
 
@@ -152,8 +158,9 @@ export default function NodeDetail({
           {/* 描述 */}
           {node.description && (
             <div className="mt-5">
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-star-dim">
-                📝 描述
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-star-dim">
+                <NoteIcon size={14} />
+                描述
               </h3>
               <p className="text-sm leading-relaxed text-star-white/80">
                 {node.description}
@@ -164,8 +171,9 @@ export default function NodeDetail({
           {/* 关联概念 */}
           {related.length > 0 && (
             <div className="mt-6">
-              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
-                🔗 关联概念（{related.length}）
+              <h3 className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-star-dim">
+                <LinkIcon size={14} />
+                关联概念（{related.length}）
               </h3>
               <div className="space-y-1.5">
                 {related.map((item, idx) => {
@@ -186,7 +194,11 @@ export default function NodeDetail({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-star-dim/50">
-                            {item.direction === "out" ? "→" : "←"}
+                            {item.direction === "out" ? (
+                              <ArrowRightIcon size={12} />
+                            ) : (
+                              <ArrowLeftIcon size={12} />
+                            )}
                           </span>
                           <span className="truncate text-sm font-medium text-star-white">
                             {item.node.label}
@@ -197,7 +209,7 @@ export default function NodeDetail({
                         </span>
                       </div>
                       <span className="text-star-dim/30 transition-colors group-hover:text-node-blue">
-                        →
+                        <ArrowRightIcon size={14} />
                       </span>
                     </button>
                   );
@@ -209,8 +221,9 @@ export default function NodeDetail({
           {/* 节点统计 */}
           {stats && (
             <div className="mt-6">
-              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
-                📊 节点统计
+              <h3 className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-star-dim">
+                <ChartIcon size={14} />
+                节点统计
               </h3>
               <div className="space-y-3 rounded-xl border border-space-500/40 bg-space-700/30 p-4">
                 <div className="flex items-center justify-between">

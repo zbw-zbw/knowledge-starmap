@@ -4,7 +4,7 @@ import Reveal from "@/components/ui/Reveal";
 import { HOW_IT_WORKS } from "@/lib/constants";
 
 /**
- * 使用流程区块：横向三步（移动端纵向），步骤之间用虚线箭头连接。
+ * 使用流程区块：横向三步（移动端纵向），步骤之间用箭头连接。
  */
 export default function HowItWorks() {
   return (
@@ -35,7 +35,7 @@ export default function HowItWorks() {
                 </p>
               </Reveal>
 
-              {/* 步骤之间的虚线箭头（最后一步不显示） */}
+              {/* 步骤之间的箭头（最后一步不显示） */}
               {i < HOW_IT_WORKS.length - 1 && <DashedArrow />}
             </div>
           ))}
@@ -45,16 +45,15 @@ export default function HowItWorks() {
   );
 }
 
-/** 虚线箭头：移动端纵向，桌面端横向。 */
+/** 步骤箭头：移动端向下，桌面端向右。 */
 function DashedArrow() {
   return (
     <div
       aria-hidden
       className="flex items-center justify-center text-node-blue/60"
     >
-      {/* 移动端：纵向虚线 + 向下箭头 */}
-      <div className="flex flex-col items-center py-1 md:hidden">
-        <span className="h-10 border-l border-dashed border-node-blue/40" />
+      {/* 移动端：向下箭头 */}
+      <div className="flex items-center justify-center py-2 md:hidden">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path
             d="M4 6l4 4 4-4"
@@ -66,9 +65,8 @@ function DashedArrow() {
         </svg>
       </div>
 
-      {/* 桌面端：横向虚线 + 向右箭头 */}
-      <div className="hidden items-center md:flex">
-        <span className="w-10 border-t border-dashed border-node-blue/40 lg:w-16" />
+      {/* 桌面端：向右箭头 */}
+      <div className="hidden w-10 items-center justify-center md:flex lg:w-16">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path
             d="M6 4l4 4-4 4"

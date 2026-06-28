@@ -1,6 +1,7 @@
 "use client";
 
 import Reveal from "@/components/ui/Reveal";
+import { ICON_MAP } from "@/components/ui/Icons";
 import { FEATURES, FEATURE_COLOR_MAP } from "@/lib/constants";
 
 /**
@@ -37,7 +38,15 @@ export default function Features() {
                     }
                   />
 
-                  <div className="text-4xl">{feature.icon}</div>
+                  <div
+                    className="flex items-center justify-center"
+                    style={{ color: accent }}
+                  >
+                    {(() => {
+                      const Icon = ICON_MAP[feature.icon];
+                      return <Icon size={36} />;
+                    })()}
+                  </div>
                   <h3 className="mt-5 text-xl font-semibold text-star-white">
                     {feature.title}
                   </h3>

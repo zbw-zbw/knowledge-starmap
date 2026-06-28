@@ -13,7 +13,6 @@ export const metadata: Metadata = {
     "知识管理",
     "可视化",
     "笔记工具",
-    "TRAE",
     "力导向图",
     "DeepSeek",
   ],

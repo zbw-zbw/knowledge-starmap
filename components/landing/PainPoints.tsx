@@ -2,6 +2,7 @@
 
 import Card from "@/components/ui/Card";
 import Reveal from "@/components/ui/Reveal";
+import { ICON_MAP } from "@/components/ui/Icons";
 import { PAIN_POINTS } from "@/lib/constants";
 
 /**
@@ -24,7 +25,12 @@ export default function PainPoints() {
           {PAIN_POINTS.map((point, i) => (
             <Reveal key={point.title} delay={i * 120}>
               <Card className="h-full p-8 active:scale-95">
-                <div className="text-5xl">{point.icon}</div>
+                <div className="flex items-center justify-center">
+                  {(() => {
+                    const Icon = ICON_MAP[point.icon];
+                    return <Icon size={48} className="text-node-blue" />;
+                  })()}
+                </div>
                 <h3 className="mt-5 text-xl font-semibold text-star-white">
                   {point.title}
                 </h3>

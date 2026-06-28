@@ -19,6 +19,14 @@ import NodeDetail from "@/components/explore/NodeDetail";
 import DiscoveryPanel from "@/components/explore/DiscoveryPanel";
 import EmptyState from "@/components/ui/EmptyState";
 import MobileToolbar, { type MobileSheetType } from "@/components/app/MobileToolbar";
+import {
+  SparkleIcon,
+  ImportIcon,
+  SearchIcon,
+  DiscoverIcon,
+  SettingsIcon,
+  CloseIcon,
+} from "@/components/ui/Icons";
 
 interface AppLayoutProps {
   graph: KnowledgeGraph;
@@ -113,9 +121,9 @@ export default function AppLayout(props: AppLayoutProps) {
   const PanelContent = (
     <div className="flex h-full flex-col">
       {/* 标题区域 */}
-      <div className="border-b border-space-500/60 px-5 py-5">
+      <div className="px-5 py-5">
         <div className="flex items-center gap-2">
-          <span className="text-node-blue">✦</span>
+          <SparkleIcon size={18} className="text-node-blue" />
           <span className="text-lg font-semibold text-star-white">
             {SITE.name}
           </span>
@@ -137,7 +145,7 @@ export default function AppLayout(props: AppLayoutProps) {
         </div>
 
         {/* 导入面板 */}
-        <div className="mb-6 border-t border-space-500/30 pt-5">
+        <div className="mb-6 pt-5">
           <ImportPanel
             showImportInput={showImportInput}
             setShowImportInput={setShowImportInput}
@@ -149,7 +157,7 @@ export default function AppLayout(props: AppLayoutProps) {
         </div>
 
         {/* 统计信息 */}
-        <div className="mb-6 border-t border-space-500/30 pt-5">
+        <div className="mb-6 pt-5">
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
             图谱统计
           </h3>
@@ -169,20 +177,18 @@ export default function AppLayout(props: AppLayoutProps) {
           </div>
         )}
 
-        {/* 导入历史（带时间线装饰） */}
+        {/* 导入历史 */}
         {importHistory.length > 0 && (
-          <div className="mb-6 border-t border-space-500/30 pt-5">
+          <div className="mb-6 pt-5">
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
               导入历史
             </h3>
-            <div className="timeline-left-border pl-3">
-              <ImportHistory history={importHistory} />
-            </div>
+            <ImportHistory history={importHistory} />
           </div>
         )}
 
         {/* AI 关联发现 */}
-        <div className="mb-6 border-t border-space-500/30 pt-5">
+        <div className="mb-6 pt-5">
           <DiscoveryPanel
             discoveries={discoveries}
             isDiscovering={isDiscovering}
@@ -208,7 +214,7 @@ export default function AppLayout(props: AppLayoutProps) {
       </div>
 
       {/* 底部：领域筛选 + 图例 */}
-      <div className="border-t border-space-500/60 px-5 py-4">
+      <div className="px-5 py-4">
         <div className="mb-3">
           <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-star-dim">
             领域筛选
@@ -236,20 +242,36 @@ export default function AppLayout(props: AppLayoutProps) {
           onClick={() => setMobileSheet(null)}
         />
         {/* 底部浮层 */}
-        <div className="fixed bottom-16 left-0 right-0 z-40 max-h-[60vh] overflow-y-auto rounded-t-2xl border-t border-space-500 bg-space-800 p-4 shadow-2xl animate-slide-in-bottom md:hidden">
+        <div className="fixed bottom-16 left-0 right-0 z-40 max-h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 p-4 shadow-2xl animate-slide-in-bottom md:hidden">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-star-white">
-              {mobileSheet === "search" && "🔍 搜索知识概念"}
-              {mobileSheet === "import" && "📥 导入知识"}
-              {mobileSheet === "discover" && "🔮 AI 关联发现"}
-              {mobileSheet === "settings" && "⚙ 设置"}
+            <h3 className="flex items-center gap-1.5 text-sm font-medium text-star-white">
+              {mobileSheet === "search" && (
+                <>
+                  <SearchIcon size={16} /> 搜索知识概念
+                </>
+              )}
+              {mobileSheet === "import" && (
+                <>
+                  <ImportIcon size={16} /> 导入知识
+                </>
+              )}
+              {mobileSheet === "discover" && (
+                <>
+                  <DiscoverIcon size={16} /> AI 关联发现
+                </>
+              )}
+              {mobileSheet === "settings" && (
+                <>
+                  <SettingsIcon size={16} /> 设置
+                </>
+              )}
             </h3>
             <button
               onClick={() => setMobileSheet(null)}
               className="text-star-dim hover:text-star-white"
               aria-label="关闭"
             >
-              ✕
+              <CloseIcon size={16} />
             </button>
           </div>
 
@@ -343,7 +365,7 @@ export default function AppLayout(props: AppLayoutProps) {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden bg-space-900 md:h-[calc(100vh-4rem)]">
       {/* 左侧面板 - 桌面端 */}
-      <aside className="hidden w-80 shrink-0 border-r border-space-500/60 bg-space-800/80 md:flex md:flex-col">
+      <aside className="hidden w-80 shrink-0 bg-space-800/80 md:flex md:flex-col">
         {PanelContent}
       </aside>
 
@@ -352,16 +374,17 @@ export default function AppLayout(props: AppLayoutProps) {
         {isGraphEmpty ? (
           <div className="flex h-full items-center justify-center px-5 pb-20 md:pb-0">
             <EmptyState
-              icon="✦"
+              icon="sparkle"
               title="你的知识宇宙等待探索"
               description="导入你的第一篇笔记或文章，开始构建知识星图"
               action={
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowImportInput(true)}
-                    className="rounded-xl bg-node-blue/90 px-6 py-2.5 text-sm font-medium text-space-900 transition-all hover:bg-node-blue hover:shadow-[0_0_16px_rgba(79,195,247,0.4)] active:scale-95"
+                    className="flex items-center gap-2 rounded-xl bg-node-blue/90 px-6 py-2.5 text-sm font-medium text-space-900 transition-all hover:bg-node-blue hover:shadow-[0_0_16px_rgba(79,195,247,0.4)] active:scale-95"
                   >
-                    📥 导入知识
+                    <ImportIcon size={16} />
+                    导入知识
                   </button>
                   <button
                     onClick={onReloadSample}

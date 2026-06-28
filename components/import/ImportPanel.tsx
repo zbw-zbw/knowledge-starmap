@@ -4,6 +4,7 @@ import { useState } from "react";
 import TextInput from "./TextInput";
 import SampleTexts from "./SampleTexts";
 import ImportProgress from "./ImportProgress";
+import { ImportIcon, ChevronDownIcon } from "@/components/ui/Icons";
 
 interface ImportPanelProps {
   showImportInput: boolean;
@@ -55,13 +56,23 @@ export default function ImportPanel({
       <button
         onClick={handleToggle}
         disabled={isImporting}
-        className={`w-full rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`group flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
           showImportInput
             ? "border border-space-500 text-star-dim hover:border-space-500/60"
             : "bg-node-blue/90 text-space-900 hover:bg-node-blue hover:shadow-[0_0_16px_rgba(79,195,247,0.4)]"
         }`}
       >
-        {showImportInput ? "▼ 收起" : "📥 导入知识"}
+        {showImportInput ? (
+          <>
+            收起
+            <ChevronDownIcon size={16} className="rotate-180 transition-transform" />
+          </>
+        ) : (
+          <>
+            <ImportIcon size={16} />
+            导入知识
+          </>
+        )}
       </button>
 
       {/* 展开的输入区域 */}

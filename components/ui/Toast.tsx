@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { CheckIcon, WarningIcon, InfoIcon, CloseIcon } from "@/components/ui/Icons";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -16,21 +17,21 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
 }
 
-const TOAST_STYLES: Record<ToastType, { bg: string; border: string; icon: string }> = {
+const TOAST_STYLES: Record<ToastType, { bg: string; border: string; Icon: typeof CheckIcon }> = {
   success: {
     bg: "bg-green-500/15",
     border: "border-green-400/40",
-    icon: "✓",
+    Icon: CheckIcon,
   },
   error: {
     bg: "bg-red-500/15",
     border: "border-red-400/40",
-    icon: "⚠",
+    Icon: WarningIcon,
   },
   info: {
     bg: "bg-blue-500/15",
     border: "border-blue-400/40",
-    icon: "ℹ",
+    Icon: InfoIcon,
   },
 };
 
@@ -52,20 +53,20 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
   return createPortal(
     <div className="fixed left-1/2 top-20 z-[100] flex -translate-x-1/2 flex-col items-center gap-2 pointer-events-none">
       {toasts.map((toast) => {
-        const style = TOAST_STYLES[toast.type];
+        const { bg, border, Icon } = TOAST_STYLES[toast.type];
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center gap-2.5 rounded-xl border ${style.border} ${style.bg} px-4 py-2.5 backdrop-blur-md shadow-lg animate-slide-in-top`}
+            className={`pointer-events-auto flex items-center gap-2.5 rounded-xl border ${border} ${bg} px-4 py-2.5 backdrop-blur-md shadow-lg animate-slide-in-top`}
           >
-            <span className="text-sm font-medium">{style.icon}</span>
+            <Icon size={16} className="shrink-0" />
             <span className="text-sm text-star-white">{toast.message}</span>
             <button
               onClick={() => onDismiss(toast.id)}
               className="ml-2 text-star-dim/60 transition-colors hover:text-star-white"
               aria-label="关闭提示"
             >
-              ✕
+              <CloseIcon size={14} />
             </button>
           </div>
         );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
+import { SparkleIcon } from "@/components/ui/Icons";
 
 /**
  * 顶部导航栏：固定顶部、半透明深色背景 + backdrop-blur。
@@ -22,8 +23,8 @@ export default function Navbar() {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "border-b border-space-500/60 bg-space-900/70 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl"
-          : "border-b border-transparent bg-transparent backdrop-blur-md"
+          ? "bg-space-900/70 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          : "bg-transparent backdrop-blur-md"
       }`}
     >
       <nav className="mx-auto flex h-14 items-center justify-between px-4 md:h-16 md:px-8">
@@ -33,9 +34,10 @@ export default function Navbar() {
           className="group flex items-center gap-2 text-star-white transition-colors hover:text-node-blue"
           aria-label="返回知识星图首页"
         >
-          <span className="text-xl text-node-blue transition-transform duration-300 group-hover:scale-110">
-            ✦
-          </span>
+          <SparkleIcon
+            size={20}
+            className="text-node-blue transition-transform duration-300 group-hover:scale-110"
+          />
           <span className="hidden text-base font-semibold tracking-wide sm:inline">
             知识星图
           </span>
