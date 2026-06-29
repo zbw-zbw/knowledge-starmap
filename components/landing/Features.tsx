@@ -24,7 +24,7 @@ export default function Features() {
             return (
               <Reveal key={feature.title} delay={i * 100}>
                 <article
-                  className="group relative h-full overflow-hidden rounded-2xl border border-space-500 bg-space-700/80 p-8 transition-all duration-300 hover:border-node-blue/40 active:scale-95"
+                  className="group relative h-full overflow-hidden rounded-2xl border border-space-500 bg-space-700/80 p-8 transition-all duration-300 hover:border-node-blue/50 hover:shadow-[0_0_30px_rgba(79,195,247,0.08)] active:scale-95"
                 >
                   {/* 左侧彩色竖线，hover 时发光扩散 */}
                   <span
@@ -39,7 +39,7 @@ export default function Features() {
                   />
 
                   <div
-                    className="flex items-center justify-center"
+                    className="flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
                     style={{ color: accent }}
                   >
                     {(() => {

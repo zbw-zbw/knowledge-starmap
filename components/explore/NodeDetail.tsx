@@ -108,7 +108,7 @@ export default function NodeDetail({
 
       {/* 详情面板 */}
       <aside
-        className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:bottom-auto md:left-auto md:top-14 md:right-0 md:h-[calc(100vh-3.5rem)] md:w-[360px] md:rounded-none"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:bottom-auto md:left-auto md:top-14 md:right-0 md:h-[calc(100vh-3.5rem)] md:w-[360px] md:rounded-none relative"
         style={{
           animation: "slideInRight 300ms ease-out",
         }}
@@ -117,14 +117,18 @@ export default function NodeDetail({
         <div className="sticky top-0 z-10 flex items-center justify-between bg-space-800/95 px-5 py-4 backdrop-blur-sm">
           <button
             onClick={onClose}
-            className="flex items-center gap-1 text-sm text-star-dim transition-colors hover:text-star-white"
+            className="hidden items-center gap-1 text-sm text-star-dim transition-colors hover:text-star-white md:flex"
           >
             <ArrowLeftIcon size={16} />
             返回
           </button>
+          {/* 移动端居中关闭按钮 */}
+          <div className="md:hidden flex w-full justify-center">
+            <div className="h-1 w-10 rounded-full bg-space-500" />
+          </div>
           <button
             onClick={onClose}
-            className="text-star-dim transition-colors hover:text-star-white"
+            className="absolute right-4 top-4 rounded-full bg-space-700 p-1.5 text-star-dim transition-colors hover:text-star-white md:static md:rounded-none md:bg-transparent md:p-0"
             aria-label="关闭"
           >
             <CloseIcon size={16} />
@@ -274,6 +278,11 @@ export default function NodeDetail({
               </div>
             </div>
           )}
+
+          {/* 键盘快捷键提示 */}
+          <p className="mt-8 text-center text-xs text-star-dim/50">
+            按 Esc 关闭 · 按 ? 查看快捷键
+          </p>
         </div>
       </aside>
     </>,

@@ -24,7 +24,7 @@ export default function HowItWorks() {
                 className="flex w-full max-w-xs flex-col items-center text-center md:w-auto md:flex-1"
               >
                 {/* 圆形数字标识 */}
-                <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-node-blue text-xl font-bold text-node-blue">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-node-blue bg-node-blue/10 text-xl font-bold text-node-blue shadow-[0_0_20px_rgba(79,195,247,0.15)]">
                   {item.step}
                 </div>
                 <h3 className="mt-5 text-lg font-semibold text-star-white">

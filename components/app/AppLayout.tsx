@@ -147,7 +147,7 @@ export default function AppLayout(props: AppLayoutProps) {
         </div>
 
         {/* 导入面板 */}
-        <div className="mb-6 pt-5">
+        <div className="mb-5">
           <ImportPanel
             showImportInput={showImportInput}
             setShowImportInput={setShowImportInput}
@@ -159,7 +159,7 @@ export default function AppLayout(props: AppLayoutProps) {
         </div>
 
         {/* 统计信息 */}
-        <div className="mb-6 pt-5">
+        <div className="mb-5">
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
             图谱统计
           </h3>
@@ -170,18 +170,9 @@ export default function AppLayout(props: AppLayoutProps) {
           </div>
         </div>
 
-        {/* 提示 */}
-        {!selectedNode && !isGraphEmpty && (
-          <div className="mb-6 rounded-xl border border-dashed border-space-500/50 p-3 text-center">
-            <p className="text-xs text-star-dim">
-              点击星图中的节点查看详情
-            </p>
-          </div>
-        )}
-
         {/* 导入历史 */}
         {importHistory.length > 0 && (
-          <div className="mb-6 pt-5">
+          <div className="mb-5">
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
               导入历史
             </h3>
@@ -190,7 +181,7 @@ export default function AppLayout(props: AppLayoutProps) {
         )}
 
         {/* AI 关联发现 */}
-        <div className="mb-6 pt-5">
+        <div className="mb-5">
           <DiscoveryPanel
             discoveries={discoveries}
             isDiscovering={isDiscovering}
@@ -205,21 +196,31 @@ export default function AppLayout(props: AppLayoutProps) {
 
         {/* 导出 + 清空按钮 */}
         {!isGraphEmpty && (
-          <div className="flex gap-2">
+          <div className="mb-5 flex gap-2">
             <button
               onClick={onExport}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
             >
               导出图片
             </button>
             <button
               onClick={handleClear}
               disabled={isImporting}
-              className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-1 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               清空图谱
             </button>
           </div>
+        )}
+
+        {/* 重新加载示例（图谱为空时） */}
+        {isGraphEmpty && (
+          <button
+            onClick={onReloadSample}
+            className="mb-5 w-full rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/60 hover:text-star-white active:scale-95"
+          >
+            重新加载示例数据
+          </button>
         )}
       </div>
 
@@ -368,6 +369,13 @@ export default function AppLayout(props: AppLayoutProps) {
                   </button>
                 </div>
               )}
+              {/* 重新加载示例 */}
+              <button
+                onClick={onReloadSample}
+                className="w-full rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/60 hover:text-star-white active:scale-95"
+              >
+                重新加载示例
+              </button>
             </div>
           )}
         </div>
