@@ -103,6 +103,11 @@ export default function ImportPanel({
           图谱为空，导入知识开始构建你的星图
         </p>
       )}
+
+      {/* Loading overlay covering all buttons */}
+      {isImporting && (
+        <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-space-900/40 backdrop-blur-[2px]" />
+      )}
     </div>
   );
 }

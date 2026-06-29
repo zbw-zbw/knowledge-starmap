@@ -26,7 +26,7 @@ const SYSTEM_PROMPT = `你是一个知识图谱分析专家。你的任务是从
       "label": "概念名称（中文优先，简短）",
       "group": "frontend | backend | pattern | engineering | general",
       "size": 10-28之间的整数，核心概念给大值，细节概念给小值,
-      "description": "一句话描述这个概念（20字以内）"
+      "description": "用2-3句话详细描述这个概念是什么、用来解决什么问题、为什么重要（50-100字）"
     }
   ],
   "edges": [
@@ -51,6 +51,8 @@ const SYSTEM_PROMPT = `你是一个知识图谱分析专家。你的任务是从
    - pattern: 设计模式、编程范式、算法思想
    - engineering: 工程化实践（构建、测试、部署、版本控制等）
    - general: 通用知识、跨领域概念
+
+7. description 是节点的核心内容，应该足够详细让不了解该概念的人也能理解
 
 只输出 JSON，不要输出任何其他内容。`;
 

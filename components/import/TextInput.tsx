@@ -42,7 +42,7 @@ export default function TextInput({
           onKeyDown={handleKeyDown}
           disabled={isImporting}
           placeholder="粘贴文章、笔记或 Markdown 内容...&#10;AI 将自动提取知识概念和关系"
-          className="h-32 w-full resize-none rounded-xl border border-space-500 bg-space-700/60 px-3 py-2.5 text-sm text-star-white placeholder:text-star-dim/60 focus:border-node-blue/50 focus:outline-none focus:ring-1 focus:ring-node-blue/30 disabled:opacity-50"
+          className="min-h-[120px] h-auto w-full resize-none rounded-xl border border-space-500 bg-space-700/60 px-3 py-2.5 text-sm text-star-white placeholder:text-star-dim/60 focus:border-node-blue/50 focus:outline-none focus:ring-1 focus:ring-node-blue/30 disabled:opacity-50"
         />
         <span className="absolute bottom-2 right-3 text-xs text-star-dim/60">
           {charCount} 字

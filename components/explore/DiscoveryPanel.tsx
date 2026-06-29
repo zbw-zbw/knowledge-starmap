@@ -188,6 +188,14 @@ export default function DiscoveryPanel({
                         )}
                       </button>
                     )}
+                  {(!discovery.suggestedEdges ||
+                    discovery.suggestedEdges.length === 0) &&
+                    discovery.type === "knowledge-gap" && (
+                      <span className="flex items-center gap-1 rounded-lg bg-node-purple/10 px-2.5 py-1 text-xs font-medium text-node-purple/80">
+                        <LightbulbIcon size={12} />
+                        建议补充
+                      </span>
+                    )}
                   <button
                     onClick={() => onIgnore(discovery.id)}
                     className="rounded-lg border border-space-500 px-2.5 py-1 text-xs text-star-dim transition-all hover:border-space-500/60 hover:text-star-white"

@@ -10,6 +10,16 @@ html {
   scroll-behavior: smooth;
 }
 
+/* 锚点滚动偏移：跳过固定导航栏高度 */
+section[id] {
+  scroll-margin-top: 4rem;
+}
+@media (min-width: 768px) {
+  section[id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
 /* ---------------- 全局交互光标 ---------------- */
 button,
 a,
