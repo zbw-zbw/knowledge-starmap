@@ -19,6 +19,7 @@ import { useToast, ToastContainer } from "@/components/ui/Toast";
 import OnboardingTip, { isOnboardingDismissed } from "@/components/ui/OnboardingTip";
 import { useConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useGraphPersistence } from "@/lib/useGraphPersistence";
+import ShortcutPanel from "@/components/ui/ShortcutPanel";
 
 /**
  * 主应用页面：力导向知识图谱可视化工作台。
@@ -367,6 +368,9 @@ export default function AppPage() {
 
       {/* 确认对话框 */}
       {confirmDialog}
+
+      {/* 快捷键帮助面板 */}
+      <ShortcutPanel />
 
       {/* 首次使用引导 */}
       {onboardingStep === 1 && (

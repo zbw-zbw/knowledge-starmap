@@ -6,6 +6,7 @@ import type {
   KnowledgeNode,
 } from "@/lib/types";
 import { API_TIMEOUT } from "@/lib/constants";
+import { extractJson, callDeepSeek } from "@/lib/deepseek";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -66,28 +67,6 @@ function buildUserPrompt(text: string, existingNodes: string[]): string {
 ---
 ${text}
 ---${existingHint}`;
-}
-
-/** 尝试从可能包含非 JSON 内容的字符串中提取 JSON 对象 */
-function extractJson(text: string): unknown | null {
-  // 尝试直接解析
-  try {
-    return JSON.parse(text);
-  } catch {
-    // 继续
-  }
-
-  // 尝试用正则提取 {...} 块
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      // 继续
-    }
-  }
-
-  return null;
 }
 
 /** 验证并规范化 API 返回的数据 */
@@ -181,82 +160,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-    const baseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
-
-    if (!apiKey || apiKey === "your-api-key-here") {
-      return NextResponse.json(
-        {
-          error:
-            "DeepSeek API Key 未配置。请在 .env.local 中设置 DEEPSEEK_API_KEY。",
-        },
-        { status: 500 }
-      );
-    }
-
     const existingNodes = body.existingNodes ?? [];
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+    const content = await callDeepSeek(
+      SYSTEM_PROMPT,
+      buildUserPrompt(text, existingNodes),
+      { timeout: API_TIMEOUT }
+    );
 
-    let apiResponse: Response;
-    try {
-      apiResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: buildUserPrompt(text, existingNodes),
-            },
-          ],
-          temperature: 0.3,
-          max_tokens: 2000,
-          response_format: { type: "json_object" },
-        }),
-        signal: controller.signal,
-      });
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      const isTimeout =
-        fetchError instanceof Error && fetchError.name === "AbortError";
-      return NextResponse.json(
-        {
-          error: isTimeout
-            ? "AI 分析超时，请稍后重试"
-            : "AI 服务连接失败，请检查网络",
-        },
-        { status: isTimeout ? 504 : 502 }
-      );
-    }
-    clearTimeout(timeoutId);
-
-    if (!apiResponse.ok) {
-      const errorText = await apiResponse.text().catch(() => "未知错误");
-      return NextResponse.json(
-        {
-          error: `AI 服务返回错误 (${apiResponse.status})`,
-          detail: errorText.slice(0, 200),
-        },
-        { status: 502 }
-      );
-    }
-
-    const apiData = await apiResponse.json().catch(() => null);
-    if (!apiData?.choices?.[0]?.message?.content) {
-      return NextResponse.json(
-        { error: "AI 返回内容为空" },
-        { status: 502 }
-      );
-    }
-
-    const content: string = apiData.choices[0].message.content;
     const parsed = extractJson(content);
 
     if (!parsed) {

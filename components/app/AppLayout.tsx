@@ -10,7 +10,6 @@ import type {
 } from "@/lib/types";
 import { SITE } from "@/lib/constants";
 import ForceGraph, { type ForceGraphHandle } from "@/components/graph/ForceGraph";
-import Legend from "@/components/graph/Legend";
 import ImportPanel from "@/components/import/ImportPanel";
 import ImportHistory from "@/components/import/ImportHistory";
 import SearchBar from "@/components/explore/SearchBar";
@@ -224,19 +223,16 @@ export default function AppLayout(props: AppLayoutProps) {
         )}
       </div>
 
-      {/* 底部：领域筛选 + 图例 */}
+      {/* 底部：领域筛选 */}
       <div className="px-5 py-4">
-        <div className="mb-3">
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-star-dim">
-            领域筛选
-          </h4>
-          <DomainFilter
-            graph={graph}
-            visibleGroups={visibleGroups}
-            onToggle={onToggleGroup}
-          />
-        </div>
-        <Legend />
+        <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-star-dim">
+          领域筛选
+        </h4>
+        <DomainFilter
+          graph={graph}
+          visibleGroups={visibleGroups}
+          onToggle={onToggleGroup}
+        />
       </div>
     </div>
   );
@@ -345,8 +341,6 @@ export default function AppLayout(props: AppLayoutProps) {
                   onToggle={onToggleGroup}
                 />
               </div>
-              {/* 图例 */}
-              <Legend />
               {/* 导入历史 */}
               {importHistory.length > 0 && (
                 <div>

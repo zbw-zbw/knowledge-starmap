@@ -143,12 +143,12 @@ export function renderGraph(
       ctx.lineWidth = 1 / transform.scale;
     } else if (hasHighlight) {
       // 非关联边（有高亮时）：更暗
-      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.lineWidth = 1 / transform.scale;
     } else {
       // 普通边
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 1 / transform.scale;
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1.2 / transform.scale;
     }
 
     ctx.beginPath();
@@ -218,15 +218,18 @@ export function renderGraph(
     // 发光效果（hover / 选中 / 新节点）
     if (isHighlight) {
       ctx.save();
+      // hover 时节点略微放大
+      const hoverScale = isHighlight && !isSelected ? 1.25 : 1.1;
+      const drawR = r * hoverScale;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 20 / transform.scale;
+      ctx.shadowBlur = isHighlight && !isSelected ? 24 / transform.scale : 20 / transform.scale;
       ctx.fillStyle = hexToRgba(color, alpha);
       ctx.beginPath();
-      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, drawR, 0, Math.PI * 2);
       ctx.fill();
       // 外圈光晕
-      ctx.shadowBlur = 32 / transform.scale;
-      ctx.strokeStyle = hexToRgba(color, 0.4);
+      ctx.shadowBlur = isHighlight && !isSelected ? 36 / transform.scale : 32 / transform.scale;
+      ctx.strokeStyle = hexToRgba(color, isHighlight && !isSelected ? 0.5 : 0.4);
       ctx.lineWidth = 2 / transform.scale;
       ctx.stroke();
       ctx.restore();
@@ -269,6 +272,9 @@ export function renderGraph(
 
     const r = nodeRadius(node);
     const isHighlight = node.id === highlightId;
+    const isSelected = selectedNode?.id === node.id;
+    const isHoverHighlight = isHighlight && !isSelected;
+    const drawR = isHighlight ? r * (isHoverHighlight ? 1.25 : 1.1) : r;
     const isRelated = relatedNodeIds.has(node.id);
     const hasHighlight = highlightId !== null;
     const isNewNode = highlightNodeIds?.has(node.id) ?? false;
@@ -295,15 +301,20 @@ export function renderGraph(
     const fontSize = isHighlight ? 13 : 11;
     ctx.font = `${isHighlight ? "600" : "400"} ${fontSize}px -apple-system, "PingFang SC", "Segoe UI", sans-serif`;
     ctx.fillStyle = `rgba(232,234,237,${labelAlpha})`;
-    ctx.fillText(node.label, node.x, node.y + r + 8 / transform.scale);
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 4 / transform.scale;
+    ctx.fillText(node.label, node.x, node.y + drawR + 8 / transform.scale);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
   }
 
-  // 6. 选中节点的关系标签
-  if (selectedNode) {
+  // 6. 选中节点 / 悬停节点的关系标签
+  const relationLabelNode = selectedNode ?? hoveredNode;
+  if (relationLabelNode) {
     ctx.font = `400 ${11}px -apple-system, "PingFang SC", "Segoe UI", sans-serif`;
     ctx.textBaseline = "middle";
     edges.forEach((edge) => {
-      if (edge.source !== selectedNode.id && edge.target !== selectedNode.id)
+      if (edge.source !== relationLabelNode.id && edge.target !== relationLabelNode.id)
         return;
       const source = nodeMap.get(edge.source);
       const target = nodeMap.get(edge.target);
