@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import type {
   ImportRecord,
   ExtractResponse,
@@ -17,15 +17,24 @@ import type { ForceGraphHandle } from "@/components/graph/ForceGraph";
 import AppLayout from "@/components/app/AppLayout";
 import { useToast, ToastContainer } from "@/components/ui/Toast";
 import OnboardingTip, { isOnboardingDismissed } from "@/components/ui/OnboardingTip";
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useGraphPersistence } from "@/lib/useGraphPersistence";
 
 /**
  * 主应用页面：力导向知识图谱可视化工作台。
  * 管理图谱状态、导入历史、导入流程、探索功能、AI 发现。
- * 集成 Toast 轻提示和首次使用引导。
+ * 集成 Toast 轻提示、首次使用引导、图谱持久化、键盘快捷键。
  */
 export default function AppPage() {
-  const [graph, setGraph] = useState(sampleGraph);
-  const [importHistory, setImportHistory] = useState<ImportRecord[]>([]);
+  // 图谱持久化（localStorage 自动保存/恢复）
+  const {
+    graph,
+    setGraph,
+    importHistory,
+    setImportHistory,
+    clearStorage,
+  } = useGraphPersistence();
+
   const [isImporting, setIsImporting] = useState(false);
   const [showImportInput, setShowImportInput] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -46,6 +55,9 @@ export default function AppPage() {
   // Toast 轻提示
   const { toasts, showToast, dismissToast } = useToast();
 
+  // 确认对话框
+  const { dialog: confirmDialog, requestConfirm } = useConfirmDialog();
+
   // 首次使用引导步骤（根据 localStorage 确定起始步骤）
   const [onboardingStep, setOnboardingStep] = useState<number>(() => {
     if (isOnboardingDismissed("tip-graph")) {
@@ -58,8 +70,11 @@ export default function AppPage() {
     return 1;
   });
 
-  // ForceGraph ref for focusNode
+  // ForceGraph ref for focusNode / exportPNG
   const graphRef = useRef<ForceGraphHandle>(null);
+
+  // 搜索框 ref（用于键盘快捷键聚焦）
+  const searchInputRef = useRef<HTMLDivElement>(null);
 
   // ---- 计算高亮节点集合（搜索 / discovery hover）----
   const highlightNodes = useMemo(() => {
@@ -136,21 +151,32 @@ export default function AppPage() {
         setIsImporting(false);
       }
     },
-    [graph, showToast]
+    [graph, setGraph, setImportHistory, showToast]
   );
 
   const handleClear = useCallback(() => {
-    setGraph({ nodes: [], edges: [] });
-    setImportHistory([]);
-    setImportError(null);
-    setShowImportInput(false);
-    setSelectedNode(null);
-    setDiscoveries([]);
-    setDiscoveryError(null);
-    setSearchQuery("");
-    setVisibleGroups(new Set(Object.keys(GROUP_COLORS)));
-    showToast("图谱已清空", "info");
-  }, [showToast]);
+    requestConfirm(
+      {
+        title: "确认清空图谱？",
+        message: `当前图谱包含 ${graph.nodes.length} 个概念和 ${graph.edges.length} 个关联，清空后无法恢复。`,
+        confirmText: "清空",
+        cancelText: "取消",
+      },
+      () => {
+        setGraph({ nodes: [], edges: [] });
+        setImportHistory([]);
+        clearStorage();
+        setImportError(null);
+        setShowImportInput(false);
+        setSelectedNode(null);
+        setDiscoveries([]);
+        setDiscoveryError(null);
+        setSearchQuery("");
+        setVisibleGroups(new Set(Object.keys(GROUP_COLORS)));
+        showToast("图谱已清空", "info");
+      }
+    );
+  }, [graph.nodes.length, graph.edges.length, requestConfirm, setGraph, setImportHistory, clearStorage, showToast]);
 
   const handleReloadSample = useCallback(() => {
     setGraph(sampleGraph);
@@ -162,7 +188,14 @@ export default function AppPage() {
     setDiscoveryError(null);
     setSearchQuery("");
     setVisibleGroups(new Set(Object.keys(GROUP_COLORS)));
-  }, []);
+    showToast("已重新加载示例数据", "success");
+  }, [setGraph, setImportHistory, showToast]);
+
+  // ---- 导出图谱 ----
+  const handleExport = useCallback(() => {
+    graphRef.current?.exportPNG("知识星图");
+    showToast("图谱已导出为 PNG 图片", "success");
+  }, [showToast]);
 
   // ---- 探索功能 ----
   const handleNodeSelect = useCallback((node: KnowledgeNode | null) => {
@@ -185,7 +218,6 @@ export default function AppPage() {
     setVisibleGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) {
-        // 至少保留一个分组
         if (next.size > 1) {
           next.delete(group);
         }
@@ -228,7 +260,6 @@ export default function AppPage() {
 
   const handleAddEdges = useCallback(
     (edges: KnowledgeEdge[]) => {
-      // 去重添加边
       const existingKeys = new Set(
         graph.edges.map((e) => `${e.source}->${e.target}`)
       );
@@ -242,7 +273,7 @@ export default function AppPage() {
       }));
       showToast("已添加新的知识关联", "success");
     },
-    [graph.edges, showToast]
+    [graph.edges, setGraph, showToast]
   );
 
   const handleIgnoreDiscovery = useCallback((id: string) => {
@@ -253,41 +284,89 @@ export default function AppPage() {
     setDiscoveryHoverNodes(nodeIds);
   }, []);
 
+  // ---- 键盘快捷键 ----
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K: 聚焦搜索框
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        const input = searchInputRef.current?.querySelector("input");
+        if (input) {
+          input.focus();
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + E: 导出图谱
+      if ((e.metaKey || e.ctrlKey) && e.key === "e") {
+        e.preventDefault();
+        handleExport();
+        return;
+      }
+
+      // Escape: 关闭面板
+      if (e.key === "Escape") {
+        if (showImportInput) {
+          setShowImportInput(false);
+        } else if (selectedNode) {
+          setSelectedNode(null);
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + 0: 重置视图
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        graphRef.current?.resetView();
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showImportInput, selectedNode, handleExport]);
+
   return (
     <>
-      <AppLayout
-        graph={graph}
-        graphRef={graphRef}
-        onImport={handleImport}
-        onClear={handleClear}
-        onReloadSample={handleReloadSample}
-        importHistory={importHistory}
-        isImporting={isImporting}
-        showImportInput={showImportInput}
-        setShowImportInput={setShowImportInput}
-        importError={importError}
-        // 探索功能
-        selectedNode={selectedNode}
-        onNodeSelect={handleNodeSelect}
-        onSelectNodeFromSearch={handleSelectNodeFromSearch}
-        onNavigateNode={handleNavigateNode}
-        searchQuery={searchQuery}
-        onSearchChange={handleSearchChange}
-        visibleGroups={visibleGroups}
-        onToggleGroup={handleToggleGroup}
-        highlightNodes={highlightNodes}
-        discoveries={discoveries}
-        isDiscovering={isDiscovering}
-        discoveryError={discoveryError}
-        onDiscover={handleDiscover}
-        onAddEdges={handleAddEdges}
-        onIgnoreDiscovery={handleIgnoreDiscovery}
-        onHoverNodes={handleHoverNodes}
-        selectedNodeId={selectedNode?.id ?? null}
-      />
+      <div ref={searchInputRef} className="contents">
+        <AppLayout
+          graph={graph}
+          graphRef={graphRef}
+          onImport={handleImport}
+          onClear={handleClear}
+          onReloadSample={handleReloadSample}
+          onExport={handleExport}
+          importHistory={importHistory}
+          isImporting={isImporting}
+          showImportInput={showImportInput}
+          setShowImportInput={setShowImportInput}
+          importError={importError}
+          // 探索功能
+          selectedNode={selectedNode}
+          onNodeSelect={handleNodeSelect}
+          onSelectNodeFromSearch={handleSelectNodeFromSearch}
+          onNavigateNode={handleNavigateNode}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+          visibleGroups={visibleGroups}
+          onToggleGroup={handleToggleGroup}
+          highlightNodes={highlightNodes}
+          discoveries={discoveries}
+          isDiscovering={isDiscovering}
+          discoveryError={discoveryError}
+          onDiscover={handleDiscover}
+          onAddEdges={handleAddEdges}
+          onIgnoreDiscovery={handleIgnoreDiscovery}
+          onHoverNodes={handleHoverNodes}
+          selectedNodeId={selectedNode?.id ?? null}
+        />
+      </div>
 
       {/* Toast 轻提示 */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* 确认对话框 */}
+      {confirmDialog}
 
       {/* 首次使用引导 */}
       {onboardingStep === 1 && (

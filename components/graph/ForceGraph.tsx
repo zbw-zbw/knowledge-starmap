@@ -21,6 +21,8 @@ export interface ForceGraphHandle {
   focusNode: (nodeId: string) => void;
   /** 重置视图 */
   resetView: () => void;
+  /** 导出当前画布为 PNG 图片 */
+  exportPNG: (filename?: string) => void;
 }
 
 interface ForceGraphProps {
@@ -108,6 +110,18 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
         },
         resetView: () => {
           resetView(canvasSize.width, canvasSize.height);
+        },
+        exportPNG: (filename = "知识星图") => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          try {
+            const link = document.createElement("a");
+            link.download = `${filename}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+          } catch {
+            // 导出失败时静默处理
+          }
         },
       }),
       [focusNodeInternal, resetView, canvasSize]

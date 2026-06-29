@@ -26,6 +26,7 @@ import {
   DiscoverIcon,
   SettingsIcon,
   CloseIcon,
+  ChevronDownIcon,
 } from "@/components/ui/Icons";
 
 interface AppLayoutProps {
@@ -34,6 +35,7 @@ interface AppLayoutProps {
   onImport: (text: string) => Promise<void>;
   onClear: () => void;
   onReloadSample: () => void;
+  onExport: () => void;
   importHistory: ImportRecord[];
   isImporting: boolean;
   showImportInput: boolean;
@@ -71,6 +73,7 @@ export default function AppLayout(props: AppLayoutProps) {
     onImport,
     onClear,
     onReloadSample,
+    onExport,
     importHistory,
     isImporting,
     showImportInput,
@@ -201,15 +204,23 @@ export default function AppLayout(props: AppLayoutProps) {
           />
         </div>
 
-        {/* 清空按钮 */}
+        {/* 导出 + 清空按钮 */}
         {!isGraphEmpty && (
-          <button
-            onClick={handleClear}
-            disabled={isImporting}
-            className="w-full rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            清空图谱
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onExport}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+            >
+              导出图片
+            </button>
+            <button
+              onClick={handleClear}
+              disabled={isImporting}
+              className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              清空图谱
+            </button>
+          </div>
         )}
       </div>
 
@@ -345,15 +356,23 @@ export default function AppLayout(props: AppLayoutProps) {
                   <ImportHistory history={importHistory} />
                 </div>
               )}
-              {/* 清空 */}
+              {/* 导出 + 清空 */}
               {!isGraphEmpty && (
-                <button
-                  onClick={handleClear}
-                  disabled={isImporting}
-                  className="w-full rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  清空图谱
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={onExport}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+                  >
+                    导出
+                  </button>
+                  <button
+                    onClick={handleClear}
+                    disabled={isImporting}
+                    className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    清空
+                  </button>
+                </div>
               )}
             </div>
           )}

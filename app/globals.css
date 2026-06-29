@@ -98,6 +98,11 @@ body {
 }
 
 /* 闪烁星点层：更亮的光点 + twinkle 动画，三层不同 delay 产生错落闪烁 */
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 .star-layer--twinkle {
   animation: twinkle 3s ease-in-out infinite;
 }

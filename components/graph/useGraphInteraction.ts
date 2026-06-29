@@ -51,10 +51,21 @@ export function useGraphInteraction(
   const draggedNodeRef = useRef<SimulationNode | null>(null);
   const isDraggingNode = useRef(false);
   const isPanning = useRef(false);
+  const isPinching = useRef(false);
   const panState = useRef<PanState>({ startX: 0, startY: 0, transformX: 0, transformY: 0 });
   const dragStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
   const focusAnimRef = useRef<number | null>(null);
+
+  // 双指缩放状态
+  const pinchState = useRef({
+    startDist: 0,
+    startScale: 1,
+    midX: 0,
+    midY: 0,
+    startTransformX: 0,
+    startTransformY: 0,
+  });
 
   const setTransform = useCallback((t: Transform) => {
     transformRef.current = t;
@@ -248,7 +259,41 @@ export function useGraphInteraction(
     if (!canvas) return;
 
     const onTouchStart = (e: TouchEvent) => {
+      // 双指：开始 pinch-to-zoom
+      if (e.touches.length === 2) {
+        // 取消正在进行的拖拽或平移
+        if (isDraggingNode.current && draggedNodeRef.current) {
+          draggedNodeRef.current.fx = null;
+          draggedNodeRef.current.fy = null;
+          isDraggingNode.current = false;
+          draggedNodeRef.current = null;
+          setDraggedNode(null);
+        }
+        isPanning.current = false;
+        isPinching.current = true;
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const p1 = getCanvasPos(t1.clientX, t1.clientY);
+        const p2 = getCanvasPos(t2.clientX, t2.clientY);
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+
+        pinchState.current = {
+          startDist: dist,
+          startScale: transformRef.current.scale,
+          midX,
+          midY,
+          startTransformX: transformRef.current.x,
+          startTransformY: transformRef.current.y,
+        };
+        e.preventDefault();
+        return;
+      }
+
       if (e.touches.length !== 1) return;
+      isPinching.current = false;
       const touch = e.touches[0];
       const pos = getCanvasPos(touch.clientX, touch.clientY);
       dragStartPos.current = pos;
@@ -278,7 +323,39 @@ export function useGraphInteraction(
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      // 双指 pinch-to-zoom
+      if (e.touches.length === 2 && isPinching.current) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const p1 = getCanvasPos(t1.clientX, t1.clientY);
+        const p2 = getCanvasPos(t2.clientX, t2.clientY);
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+        if (pinchState.current.startDist === 0) return;
+
+        const scaleRatio = dist / pinchState.current.startDist;
+        const newScale = Math.max(
+          MIN_SCALE,
+          Math.min(MAX_SCALE, pinchState.current.startScale * scaleRatio)
+        );
+
+        // 以双指中点为中心缩放
+        const ps = pinchState.current;
+        // 缩放前中点对应的图谱坐标
+        const graphX = (ps.midX - ps.startTransformX) / ps.startScale;
+        const graphY = (ps.midY - ps.startTransformY) / ps.startScale;
+
+        setTransform({
+          scale: newScale,
+          x: ps.midX - graphX * newScale,
+          y: ps.midY - graphY * newScale,
+        });
+        e.preventDefault();
+        return;
+      }
+
       if (e.touches.length !== 1) return;
+      if (isPinching.current) return;
       const touch = e.touches[0];
       const pos = getCanvasPos(touch.clientX, touch.clientY);
 
@@ -312,7 +389,25 @@ export function useGraphInteraction(
       }
     };
 
-    const onTouchEnd = () => {
+    const onTouchEnd = (e: TouchEvent) => {
+      // 双指松开：结束 pinch
+      if (isPinching.current && e.touches.length < 2) {
+        isPinching.current = false;
+        // 如果还有一指，转为单指平移
+        if (e.touches.length === 1) {
+          const touch = e.touches[0];
+          const pos = getCanvasPos(touch.clientX, touch.clientY);
+          isPanning.current = true;
+          panState.current = {
+            startX: pos.x,
+            startY: pos.y,
+            transformX: transformRef.current.x,
+            transformY: transformRef.current.y,
+          };
+        }
+        return;
+      }
+
       if (isDraggingNode.current && draggedNodeRef.current) {
         const node = draggedNodeRef.current;
         node.fx = null;
