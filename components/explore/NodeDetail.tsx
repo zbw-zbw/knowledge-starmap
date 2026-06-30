@@ -183,7 +183,7 @@ export default function NodeDetail({
 
       {/* 详情面板 */}
       <aside
-        className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:bottom-auto md:left-auto md:top-14 md:right-0 md:h-[calc(100vh-3.5rem)] md:w-[360px] md:rounded-none relative"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] overflow-y-auto rounded-t-2xl bg-space-800 shadow-2xl transition-transform duration-300 ease-out md:top-0 md:right-0 md:h-[100dvh] md:w-[360px] md:rounded-none relative"
         style={{
           animation: "slideInRight 300ms ease-out",
         }}
