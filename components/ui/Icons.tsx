@@ -262,6 +262,38 @@ export function SearchOffIcon({ className = "", size = 20, style }: IconProps) {
   );
 }
 
+/** 铅笔/编辑图标 */
+export function PencilIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+/** 垃圾桶/删除图标 */
+export function TrashIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+/** 下载图标 */
+export function DownloadIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
 /** 图标名称到组件的映射 */
 export const ICON_MAP = {
   sparkle: SparkleIcon,
@@ -289,6 +321,9 @@ export const ICON_MAP = {
   scatter: ScatterIcon,
   unlink: UnlinkIcon,
   searchOff: SearchOffIcon,
+  pencil: PencilIcon,
+  trash: TrashIcon,
+  download: DownloadIcon,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

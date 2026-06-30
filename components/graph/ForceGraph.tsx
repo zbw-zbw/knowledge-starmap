@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
 import { MAX_DPR, HIGHLIGHT_DURATION } from "@/lib/constants";
-import { PlusIcon, MinusIcon, ResetIcon } from "@/components/ui/Icons";
+import { PlusIcon, MinusIcon, ResetIcon, ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { useForceSimulation } from "./useForceSimulation";
 import { useGraphInteraction } from "./useGraphInteraction";
 import { renderGraph } from "./graphRenderer";
@@ -36,6 +36,14 @@ interface ForceGraphProps {
   /** 外部选中的节点 id（用于同步：当外部清除选中时，内部也清除） */
   selectedNodeId?: string | null;
   className?: string;
+  /** 撤销回调 */
+  onUndo?: () => void;
+  /** 重做回调 */
+  onRedo?: () => void;
+  /** 是否可撤销 */
+  canUndo?: boolean;
+  /** 是否可重做 */
+  canRedo?: boolean;
 }
 
 /**
@@ -57,6 +65,10 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       visibleGroups = null,
       selectedNodeId = null,
       className = "",
+      onUndo,
+      onRedo,
+      canUndo = false,
+      canRedo = false,
     },
     ref
   ) {
@@ -285,6 +297,29 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
 
         {/* 右下角缩放控制 */}
         <div className="absolute bottom-20 right-4 flex flex-col gap-2 md:bottom-4">
+          {/* 撤销/重做按钮 */}
+          {(onUndo || onRedo) && (
+            <div className="flex gap-2">
+              <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="撤销"
+                title="撤销 (Cmd+Z)"
+              >
+                <ArrowLeftIcon size={18} />
+              </button>
+              <button
+                onClick={onRedo}
+                disabled={!canRedo}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="重做"
+                title="重做 (Cmd+Shift+Z)"
+              >
+                <ArrowRightIcon size={18} />
+              </button>
+            </div>
+          )}
           <button
             onClick={() => zoomBy(1.2, canvasSize.width, canvasSize.height)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"

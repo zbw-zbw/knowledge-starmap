@@ -19,6 +19,8 @@ import { useToast, ToastContainer } from "@/components/ui/Toast";
 import OnboardingTip, { isOnboardingDismissed } from "@/components/ui/OnboardingTip";
 import { useConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useGraphPersistence } from "@/lib/useGraphPersistence";
+import { useUndoRedo } from "@/lib/useUndoRedo";
+import { exportGraphJSON, importGraphJSON } from "@/lib/useGraphExport";
 import ShortcutPanel from "@/components/ui/ShortcutPanel";
 
 /**
@@ -29,12 +31,28 @@ import ShortcutPanel from "@/components/ui/ShortcutPanel";
 export default function AppPage() {
   // 图谱持久化（localStorage 自动保存/恢复）
   const {
-    graph,
-    setGraph,
+    graph: persistedGraph,
+    setGraph: setPersistedGraph,
     importHistory,
     setImportHistory,
     clearStorage,
   } = useGraphPersistence();
+
+  // 撤销/重做（基于持久化图谱初始化）
+  const {
+    current: graph,
+    push: pushGraph,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    reset: resetHistory,
+  } = useUndoRedo(persistedGraph);
+
+  // 当 graph 变化（undo/redo 或初始加载）时同步到持久化
+  useEffect(() => {
+    setPersistedGraph(graph);
+  }, [graph, setPersistedGraph]);
 
   const [isImporting, setIsImporting] = useState(false);
   const [showImportInput, setShowImportInput] = useState(false);
@@ -84,6 +102,9 @@ export default function AppPage() {
   // 搜索框 ref（用于键盘快捷键聚焦）
   const searchInputRef = useRef<HTMLDivElement>(null);
 
+  // JSON 导入文件输入 ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // ---- 计算高亮节点集合（搜索 / discovery hover）----
   const highlightNodes = useMemo(() => {
     if (discoveryHoverNodes && discoveryHoverNodes.length > 0) {
@@ -130,7 +151,7 @@ export default function AppPage() {
           nodes: extracted.nodes,
           edges: extracted.edges,
         });
-        setGraph(newGraph);
+        pushGraph(newGraph);
 
         setImportHistory((prev) =>
           [
@@ -159,7 +180,7 @@ export default function AppPage() {
         setIsImporting(false);
       }
     },
-    [graph, setGraph, setImportHistory, showToast]
+    [graph, pushGraph, setImportHistory, showToast]
   );
 
   const handleClear = useCallback(() => {
@@ -171,7 +192,7 @@ export default function AppPage() {
         cancelText: "取消",
       },
       () => {
-        setGraph({ nodes: [], edges: [] });
+        resetHistory({ nodes: [], edges: [] });
         setImportHistory([]);
         clearStorage();
         setImportError(null);
@@ -184,10 +205,10 @@ export default function AppPage() {
         showToast("图谱已清空", "info");
       }
     );
-  }, [graph.nodes.length, graph.edges.length, requestConfirm, setGraph, setImportHistory, clearStorage, showToast]);
+  }, [graph.nodes.length, graph.edges.length, requestConfirm, resetHistory, setImportHistory, clearStorage, showToast]);
 
   const handleReloadSample = useCallback(() => {
-    setGraph(sampleGraph);
+    resetHistory(sampleGraph);
     setImportHistory([]);
     setImportError(null);
     setShowImportInput(false);
@@ -197,13 +218,43 @@ export default function AppPage() {
     setSearchQuery("");
     setVisibleGroups(new Set(Object.keys(GROUP_COLORS)));
     showToast("已重新加载示例数据", "success");
-  }, [setGraph, setImportHistory, showToast]);
+  }, [resetHistory, setImportHistory, showToast]);
 
   // ---- 导出图谱 ----
   const handleExport = useCallback(() => {
     graphRef.current?.exportPNG("知识星图");
     showToast("图谱已导出为 PNG 图片", "success");
   }, [showToast]);
+
+  // ---- JSON 导出/导入 ----
+  const handleExportJSON = useCallback(() => {
+    exportGraphJSON(graph, importHistory);
+    showToast("图谱数据已导出为 JSON", "success");
+  }, [graph, importHistory, showToast]);
+
+  const handleImportJSON = useCallback((file: File) => {
+    importGraphJSON(file).then((data) => {
+      requestConfirm(
+        { title: "导入图谱数据？", message: `导入将替换当前图谱数据（${data.graph.nodes.length} 个节点）。`, confirmText: "导入", cancelText: "取消" },
+        () => {
+          resetHistory(data.graph);
+          if (data.importHistory) setImportHistory(data.importHistory);
+          setSelectedNode(null);
+          showToast(`已导入 ${data.graph.nodes.length} 个节点`, "success");
+        }
+      );
+    }).catch((err) => {
+      showToast(err instanceof Error ? err.message : "导入失败", "error");
+    });
+  }, [requestConfirm, resetHistory, setImportHistory, setSelectedNode, showToast]);
+
+  const handleImportJSONFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImportJSON(file);
+      e.target.value = "";
+    }
+  }, [handleImportJSON]);
 
   // ---- 探索功能 ----
   const handleNodeSelect = useCallback((node: KnowledgeNode | null) => {
@@ -275,13 +326,13 @@ export default function AppPage() {
         (e) => !existingKeys.has(`${e.source}->${e.target}`)
       );
       if (newEdges.length === 0) return;
-      setGraph((prev) => ({
+      pushGraph((prev) => ({
         ...prev,
         edges: [...prev.edges, ...newEdges],
       }));
       showToast("已添加新的知识关联", "success");
     },
-    [graph.edges, setGraph, showToast]
+    [graph.edges, pushGraph, showToast]
   );
 
   const handleIgnoreDiscovery = useCallback((id: string) => {
@@ -291,6 +342,29 @@ export default function AppPage() {
   const handleHoverNodes = useCallback((nodeIds: string[] | null) => {
     setDiscoveryHoverNodes(nodeIds);
   }, []);
+
+  // ---- 节点编辑/删除 ----
+  const handleUpdateNode = useCallback((id: string, updates: Partial<KnowledgeNode>) => {
+    pushGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
+    }));
+    showToast("节点已更新", "success");
+  }, [pushGraph, showToast]);
+
+  const handleDeleteNode = useCallback((id: string) => {
+    requestConfirm(
+      { title: "确认删除节点？", message: "删除后该节点及其所有关联将无法恢复（可通过撤销恢复）。", confirmText: "删除", cancelText: "取消" },
+      () => {
+        pushGraph((prev) => ({
+          nodes: prev.nodes.filter((n) => n.id !== id),
+          edges: prev.edges.filter((e) => e.source !== id && e.target !== id),
+        }));
+        setSelectedNode(null);
+        showToast("节点已删除", "info");
+      }
+    );
+  }, [pushGraph, setSelectedNode, requestConfirm, showToast]);
 
   // ---- 键盘快捷键 ----
   useEffect(() => {
@@ -309,6 +383,20 @@ export default function AppPage() {
       if ((e.metaKey || e.ctrlKey) && e.key === "e") {
         e.preventDefault();
         handleExport();
+        return;
+      }
+
+      // Cmd/Ctrl + Z: 撤销
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        if (canUndo) undo();
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + Z: 重做
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        if (canRedo) redo();
         return;
       }
 
@@ -332,11 +420,19 @@ export default function AppPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showImportInput, selectedNode, handleExport]);
+  }, [showImportInput, selectedNode, handleExport, canUndo, canRedo, undo, redo]);
 
   return (
     <>
       <div ref={searchInputRef} className="contents">
+        {/* Hidden file input for JSON import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={handleImportJSONFileChange}
+        />
         <AppLayout
           graph={graph}
           graphRef={graphRef}
@@ -367,6 +463,17 @@ export default function AppPage() {
           onIgnoreDiscovery={handleIgnoreDiscovery}
           onHoverNodes={handleHoverNodes}
           selectedNodeId={selectedNode?.id ?? null}
+          // 撤销/重做
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          // 节点编辑/删除
+          onNodeUpdate={handleUpdateNode}
+          onNodeDelete={handleDeleteNode}
+          // JSON 导出/导入
+          onExportJSON={handleExportJSON}
+          onImportJSONTrigger={() => fileInputRef.current?.click()}
         />
       </div>
 

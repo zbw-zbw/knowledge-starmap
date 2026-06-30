@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, type RefObject } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, type RefObject } from "react";
 import type {
   KnowledgeGraph,
   KnowledgeNode,
@@ -26,6 +26,7 @@ import {
   SettingsIcon,
   CloseIcon,
   ChevronDownIcon,
+  DownloadIcon,
 } from "@/components/ui/Icons";
 
 interface AppLayoutProps {
@@ -58,6 +59,17 @@ interface AppLayoutProps {
   onIgnoreDiscovery: (id: string) => void;
   onHoverNodes: (nodeIds: string[] | null) => void;
   selectedNodeId: string | null;
+  // 撤销/重做
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  // 节点编辑/删除
+  onNodeUpdate: (id: string, updates: Partial<KnowledgeNode>) => void;
+  onNodeDelete: (id: string) => void;
+  // JSON 导出/导入
+  onExportJSON: () => void;
+  onImportJSONTrigger: () => void;
 }
 
 /**
@@ -94,10 +106,20 @@ export default function AppLayout(props: AppLayoutProps) {
     onIgnoreDiscovery,
     onHoverNodes,
     selectedNodeId,
+    onUndo,
+    onRedo,
+    canUndo,
+    canRedo,
+    onNodeUpdate,
+    onNodeDelete,
+    onExportJSON,
+    onImportJSONTrigger,
   } = props;
 
   const [mobileSheet, setMobileSheet] = useState<MobileSheetType>(null);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const isGraphEmpty = graph.nodes.length === 0;
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   // 统计信息
   const stats = useMemo(() => {
@@ -118,6 +140,18 @@ export default function AppLayout(props: AppLayoutProps) {
   const handleCloseDetail = useCallback(() => {
     onNodeSelect(null);
   }, [onNodeSelect]);
+
+  // 点击外部关闭导出下拉菜单
+  useEffect(() => {
+    if (!showExportDropdown) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setShowExportDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showExportDropdown]);
 
   // 左侧面板内容（桌面端）
   const PanelContent = (
@@ -194,14 +228,47 @@ export default function AppLayout(props: AppLayoutProps) {
           />
         </div>
 
-        {/* 导出 + 清空按钮 */}
+        {/* 导出 + 导入 + 清空按钮 */}
         {!isGraphEmpty && (
           <div className="mb-5 flex gap-2">
+            {/* 导出下拉 */}
+            <div className="relative flex-1" ref={exportDropdownRef}>
+              <button
+                onClick={() => setShowExportDropdown((prev) => !prev)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+              >
+                <DownloadIcon size={16} />
+                导出
+                <ChevronDownIcon size={14} />
+              </button>
+              {showExportDropdown && (
+                <div className="absolute left-0 top-full z-10 mt-1 w-full overflow-hidden rounded-lg border border-space-500 bg-space-700 shadow-lg">
+                  <button
+                    onClick={() => {
+                      onExport();
+                      setShowExportDropdown(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-star-dim transition-all hover:bg-space-600 hover:text-star-white"
+                  >
+                    导出图片
+                  </button>
+                  <button
+                    onClick={() => {
+                      onExportJSON();
+                      setShowExportDropdown(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-star-dim transition-all hover:bg-space-600 hover:text-star-white"
+                  >
+                    导出 JSON
+                  </button>
+                </div>
+              )}
+            </div>
             <button
-              onClick={onExport}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+              onClick={onImportJSONTrigger}
+              className="flex-1 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
             >
-              导出图片
+              导入 JSON
             </button>
             <button
               onClick={handleClear}
@@ -426,6 +493,10 @@ export default function AppLayout(props: AppLayoutProps) {
             visibleGroups={visibleGroups}
             selectedNodeId={selectedNodeId}
             className="bg-space-900"
+            onUndo={onUndo}
+            onRedo={onRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
         )}
 
@@ -442,6 +513,8 @@ export default function AppLayout(props: AppLayoutProps) {
         graph={graph}
         onClose={handleCloseDetail}
         onNavigateNode={onNavigateNode}
+        onNodeUpdate={onNodeUpdate}
+        onNodeDelete={onNodeDelete}
       />
     </div>
   );
