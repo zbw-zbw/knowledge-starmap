@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
+import ConditionalNavbar from "@/components/layout/ConditionalNavbar";
 import Starfield from "@/components/layout/Starfield";
 
 export const metadata: Metadata = {
@@ -66,7 +66,7 @@ export default function RootLayout({
         <Starfield />
 
         {/* 顶部导航 */}
-        <Navbar />
+        <ConditionalNavbar />
 
         {/* 内容区位于星空之上 */}
         <div className="relative z-10">{children}</div>

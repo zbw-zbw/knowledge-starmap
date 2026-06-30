@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
 import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
 import { SEARCH_DEBOUNCE } from "@/lib/constants";
@@ -16,6 +17,7 @@ interface SearchBarProps {
  * 搜索栏：实时搜索（debounce 300ms），匹配 label 和 description。
  * 搜索时图谱中匹配节点正常亮度，不匹配的变暗。
  * 点击搜索结果聚焦到该节点。
+ * 下拉列表通过 createPortal 渲染到 body，避免 overflow 裁剪。
  */
 export default function SearchBar({
   graph,
@@ -26,6 +28,14 @@ export default function SearchBar({
   const [results, setResults] = useState<KnowledgeNode[]>([]);
   const [showResults, setShowResults] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // 客户端挂载检测
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // debounce 搜索
   useEffect(() => {
@@ -50,6 +60,18 @@ export default function SearchBar({
     }, SEARCH_DEBOUNCE);
     return () => clearTimeout(timer);
   }, [query, graph, onSearchChange]);
+
+  // 计算下拉框位置（基于 input 元素的 getBoundingClientRect）
+  useEffect(() => {
+    if (!showResults) {
+      setDropdownRect(null);
+      return;
+    }
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownRect(rect);
+    }
+  }, [showResults]);
 
   // 点击外部关闭搜索结果
   useEffect(() => {
@@ -81,6 +103,8 @@ export default function SearchBar({
   };
 
   const hasQuery = query.trim().length > 0;
+  const shouldShowDropdown =
+    mounted && showResults && dropdownRect;
 
   return (
     <div ref={containerRef} className="relative">
@@ -90,6 +114,7 @@ export default function SearchBar({
           <SearchIcon size={16} />
         </span>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -108,38 +133,45 @@ export default function SearchBar({
         )}
       </div>
 
-      {/* 搜索结果下拉列表 */}
-      {showResults && results.length > 0 && (
-        <div className="absolute z-30 mt-1.5 w-full overflow-hidden rounded-xl border border-space-500 bg-space-800/95 shadow-2xl backdrop-blur-md">
-          {results.map((node) => (
-            <button
-              key={node.id}
-              onClick={() => handleSelect(node)}
-              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-space-600/60"
-            >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{
-                  backgroundColor: GROUP_COLORS[node.group],
-                  boxShadow: `0 0 6px ${GROUP_COLORS[node.group]}`,
-                }}
-              />
-              <span className="flex-1 truncate text-sm text-star-white">
-                {node.label}
-              </span>
-              <span className="shrink-0 text-xs text-star-dim/70">
-                {GROUP_LABELS[node.group]}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 无搜索结果提示 */}
-      {showResults && results.length === 0 && hasQuery && (
-        <div className="absolute z-30 mt-1.5 w-full rounded-xl border border-space-500 bg-space-800/95 px-3 py-3 text-center text-sm text-star-dim backdrop-blur-md">
-          未找到匹配的概念
-        </div>
+      {/* 搜索结果下拉列表 — Portal 渲染避免 overflow 裁剪 */}
+      {shouldShowDropdown && createPortal(
+        <div
+          className="fixed z-[100] overflow-hidden rounded-xl border border-space-500 bg-space-800/95 shadow-2xl backdrop-blur-md"
+          style={{
+            top: dropdownRect.bottom + 6,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+          }}
+        >
+          {results.length > 0 ? (
+            results.map((node) => (
+              <button
+                key={node.id}
+                onClick={() => handleSelect(node)}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-space-600/60"
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: GROUP_COLORS[node.group],
+                    boxShadow: `0 0 6px ${GROUP_COLORS[node.group]}`,
+                  }}
+                />
+                <span className="flex-1 truncate text-sm text-star-white">
+                  {node.label}
+                </span>
+                <span className="shrink-0 text-xs text-star-dim/70">
+                  {GROUP_LABELS[node.group]}
+                </span>
+              </button>
+            ))
+          ) : hasQuery ? (
+            <div className="px-3 py-3 text-center text-sm text-star-dim">
+              未找到匹配的概念
+            </div>
+          ) : null}
+        </div>,
+        document.body
       )}
     </div>
   );

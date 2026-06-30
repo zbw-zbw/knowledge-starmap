@@ -59,17 +59,24 @@ export default function AppPage() {
   // 确认对话框
   const { dialog: confirmDialog, requestConfirm } = useConfirmDialog();
 
-  // 首次使用引导步骤（根据 localStorage 确定起始步骤）
-  const [onboardingStep, setOnboardingStep] = useState<number>(() => {
+  // 首次使用引导步骤（延迟初始化避免 SSR localStorage 问题）
+  const [onboardingStep, setOnboardingStep] = useState(4);
+
+  useEffect(() => {
     if (isOnboardingDismissed("tip-graph")) {
       if (isOnboardingDismissed("tip-import")) {
-        if (isOnboardingDismissed("tip-node")) return 4;
-        return 3;
+        if (isOnboardingDismissed("tip-node")) {
+          setOnboardingStep(4);
+        } else {
+          setOnboardingStep(3);
+        }
+      } else {
+        setOnboardingStep(2);
       }
-      return 2;
+    } else {
+      setOnboardingStep(1);
     }
-    return 1;
-  });
+  }, []);
 
   // ForceGraph ref for focusNode / exportPNG
   const graphRef = useRef<ForceGraphHandle>(null);

@@ -384,7 +384,7 @@ export default function AppLayout(props: AppLayoutProps) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden bg-space-900 md:h-[calc(100vh-4rem)]">
+    <div className="flex h-[100dvh] overflow-hidden bg-space-900">
       {/* 左侧面板 - 桌面端 */}
       <aside className="hidden w-80 shrink-0 bg-space-800/80 md:flex md:flex-col">
         {PanelContent}
@@ -447,11 +447,11 @@ export default function AppLayout(props: AppLayoutProps) {
   );
 }
 
-/** 统计卡片 */
+/** 统计卡片（数字变化时带计数动画） */
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-space-500/50 bg-space-700/50 px-2 py-3 text-center">
-      <div className="text-2xl font-bold text-node-blue transition-all duration-300">
+      <div className="text-2xl font-bold tabular-nums text-node-blue transition-all duration-300">
         {value}
       </div>
       <div className="mt-0.5 text-xs text-star-dim">{label}</div>
