@@ -15,6 +15,8 @@ interface UseGraphInteractionReturn {
   focusNode: (nodeId: string, width: number, height: number) => void;
   resetView: (width: number, height: number) => void;
   zoomBy: (factor: number, width: number, height: number) => void;
+  contextMenu: { x: number; y: number; nodeId: string } | null;
+  setContextMenu: (menu: { x: number; y: number; nodeId: string } | null) => void;
 }
 
 interface PanState {
@@ -46,6 +48,7 @@ export function useGraphInteraction(
   const [hoveredNode, setHoveredNode] = useState<SimulationNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<SimulationNode | null>(null);
   const [draggedNode, setDraggedNode] = useState<SimulationNode | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   // 内部状态 ref（供事件回调读取最新值，避免闭包陷阱）
   const draggedNodeRef = useRef<SimulationNode | null>(null);
@@ -238,11 +241,24 @@ export function useGraphInteraction(
       }
     };
 
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      const pos = getCanvasPos(e.clientX, e.clientY);
+      const node = hitTest(pos.x, pos.y);
+      if (node) {
+        setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+        setSelectedNode(node);
+      } else {
+        setContextMenu(null);
+      }
+    };
+
     canvas.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("mouseleave", onLeave);
+    canvas.addEventListener("contextmenu", onContextMenu);
 
     return () => {
       canvas.removeEventListener("mousedown", onMouseDown);
@@ -250,6 +266,7 @@ export function useGraphInteraction(
       window.removeEventListener("mouseup", onMouseUp);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("contextmenu", onContextMenu);
     };
   }, [canvasRef, getCanvasPos, hitTest, screenToGraph, setTransform, reheat]);
 
@@ -567,5 +584,7 @@ export function useGraphInteraction(
     focusNode,
     resetView,
     zoomBy,
+    contextMenu,
+    setContextMenu,
   };
 }

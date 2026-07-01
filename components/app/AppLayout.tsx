@@ -497,6 +497,8 @@ export default function AppLayout(props: AppLayoutProps) {
             onRedo={onRedo}
             canUndo={canUndo}
             canRedo={canRedo}
+            onNodeEdit={(node) => onNodeSelect(node)}
+            onNodeDelete={(node) => onNodeDelete(node.id)}
           />
         )}
 

@@ -14,6 +14,7 @@ import { PlusIcon, MinusIcon, ResetIcon, ArrowLeftIcon, ArrowRightIcon } from "@
 import { useForceSimulation } from "./useForceSimulation";
 import { useGraphInteraction } from "./useGraphInteraction";
 import { renderGraph } from "./graphRenderer";
+import ContextMenu from "./ContextMenu";
 
 /** ForceGraph 暴露给父组件的命令式接口 */
 export interface ForceGraphHandle {
@@ -44,6 +45,10 @@ interface ForceGraphProps {
   canUndo?: boolean;
   /** 是否可重做 */
   canRedo?: boolean;
+  /** 节点编辑回调（右键菜单触发） */
+  onNodeEdit?: (node: KnowledgeNode) => void;
+  /** 节点删除回调（右键菜单触发） */
+  onNodeDelete?: (node: KnowledgeNode) => void;
 }
 
 /**
@@ -69,6 +74,8 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       onRedo,
       canUndo = false,
       canRedo = false,
+      onNodeEdit,
+      onNodeDelete,
     },
     ref
   ) {
@@ -89,6 +96,8 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       resetView,
       zoomBy,
       setSelectedNode,
+      contextMenu,
+      setContextMenu,
     } = useGraphInteraction(canvasRef, nodesRef, canvasSize, reheat);
 
     // hover/selected 变化时同步到 ref 供渲染循环读取
@@ -344,6 +353,23 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
             <ResetIcon size={16} />
           </button>
         </div>
+
+        {/* 右键上下文菜单 */}
+        {contextMenu && onNodeEdit && onNodeDelete && (() => {
+          const node = nodesRef.current.find((n) => n.id === contextMenu.nodeId);
+          if (!node) return null;
+          return (
+            <ContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              node={node}
+              onEdit={() => onNodeEdit(node)}
+              onDelete={() => onNodeDelete(node)}
+              onFocus={() => focusNodeInternal(node.id, canvasSize.width, canvasSize.height)}
+              onClose={() => setContextMenu(null)}
+            />
+          );
+        })()}
       </div>
     );
   }
