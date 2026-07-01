@@ -32,7 +32,7 @@ import {
 interface AppLayoutProps {
   graph: KnowledgeGraph;
   graphRef: RefObject<ForceGraphHandle>;
-  onImport: (text: string) => Promise<void>;
+  onImport: (text: string) => Promise<boolean>;
   onClear: () => void;
   onReloadSample: () => void;
   onExport: () => void;

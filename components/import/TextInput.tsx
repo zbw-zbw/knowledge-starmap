@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { SparkleIcon } from "@/components/ui/Icons";
 import { MIN_TEXT_LENGTH } from "@/lib/constants";
 
 interface TextInputProps {
@@ -58,10 +59,23 @@ export default function TextInput({
       <button
         onClick={onSubmit}
         disabled={!canSubmit}
-        className="w-full rounded-xl bg-node-blue/90 px-4 py-2.5 text-sm font-medium text-space-900 transition-all hover:bg-node-blue hover:shadow-[0_0_16px_rgba(79,195,247,0.4)] disabled:cursor-not-allowed disabled:bg-space-600 disabled:text-star-dim disabled:shadow-none"
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-node-blue/90 px-4 py-2.5 text-sm font-medium text-space-900 transition-all hover:bg-node-blue hover:shadow-[0_0_16px_rgba(79,195,247,0.4)] disabled:cursor-not-allowed disabled:bg-space-600 disabled:text-star-dim disabled:shadow-none"
       >
-        {isImporting ? "正在提取..." : "✨ 提取知识"}
+        {isImporting ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-space-900/30 border-t-space-900" />
+            正在提取...
+          </>
+        ) : (
+          <>
+            <SparkleIcon size={16} />
+            提取知识
+          </>
+        )}
       </button>
+      <p className="text-center text-xs text-star-dim/40">
+        按 ⌘+Enter 快速提交
+      </p>
     </div>
   );
 }

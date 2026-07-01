@@ -9,7 +9,7 @@ import { ImportIcon, ChevronDownIcon } from "@/components/ui/Icons";
 interface ImportPanelProps {
   showImportInput: boolean;
   setShowImportInput: (show: boolean) => void;
-  onImport: (text: string) => Promise<void>;
+  onImport: (text: string) => Promise<boolean>;
   isImporting: boolean;
   isGraphEmpty: boolean;
   importError: string | null;
@@ -34,9 +34,11 @@ export default function ImportPanel({
 
   const handleSubmit = async () => {
     if (text.trim().length === 0) return;
-    await onImport(text.trim());
-    // 导入成功后清空文本并收起（由父组件控制 showImportInput）
-    setText("");
+    const success = await onImport(text.trim());
+    // 仅在导入成功后清空文本（失败时保留以便重试）
+    if (success) {
+      setText("");
+    }
   };
 
   const handleSampleSelect = (sampleText: string) => {
@@ -102,11 +104,6 @@ export default function ImportPanel({
         <p className="mt-2 text-center text-xs text-star-dim/60">
           图谱为空，导入知识开始构建你的星图
         </p>
-      )}
-
-      {/* Loading overlay covering all buttons */}
-      {isImporting && (
-        <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-space-900/40 backdrop-blur-[2px]" />
       )}
     </div>
   );

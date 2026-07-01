@@ -155,6 +155,31 @@ export function renderGraph(
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(target.x, target.y);
     ctx.stroke();
+
+    // 方向箭头（在边的中点附近，指向 target）
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 30) {
+      const arrowSize = 6 / transform.scale;
+      const arrowPos = 0.55; // 箭头位置（中点偏 target 侧）
+      const ax = source.x + dx * arrowPos;
+      const ay = source.y + dy * arrowPos;
+      const angle = Math.atan2(dy, dx);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(
+        ax - arrowSize * Math.cos(angle - Math.PI / 6),
+        ay - arrowSize * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.lineTo(
+        ax - arrowSize * Math.cos(angle + Math.PI / 6),
+        ay - arrowSize * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.closePath();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fill();
+    }
   });
 
   // 4. 绘制节点（圆形）
@@ -322,8 +347,35 @@ export function renderGraph(
 
       const midX = (source.x + target.x) / 2;
       const midY = (source.y + target.y) / 2;
-      ctx.fillStyle = "rgba(156,163,175,0.7)";
-      ctx.fillText(edge.relation, midX, midY);
+
+      // 绘制背景圆角矩形
+      const text = edge.relation;
+      const textWidth = ctx.measureText(text).width;
+      const padX = 6 / transform.scale;
+      const padY = 3 / transform.scale;
+      const bgW = textWidth + padX * 2;
+      const bgH = 16 / transform.scale;
+      ctx.fillStyle = "rgba(15,15,35,0.85)";
+      ctx.beginPath();
+      const r = 4 / transform.scale;
+      const bx = midX - bgW / 2;
+      const by = midY - bgH / 2;
+      ctx.moveTo(bx + r, by);
+      ctx.lineTo(bx + bgW - r, by);
+      ctx.quadraticCurveTo(bx + bgW, by, bx + bgW, by + r);
+      ctx.lineTo(bx + bgW, by + bgH - r);
+      ctx.quadraticCurveTo(bx + bgW, by + bgH, bx + bgW - r, by + bgH);
+      ctx.lineTo(bx + r, by + bgH);
+      ctx.quadraticCurveTo(bx, by + bgH, bx, by + bgH - r);
+      ctx.lineTo(bx, by + r);
+      ctx.quadraticCurveTo(bx, by, bx + r, by);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(156,163,175,0.9)";
+      ctx.textAlign = "center";
+      ctx.fillText(text, midX, midY);
+      ctx.textAlign = "left";
     });
   }
 

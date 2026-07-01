@@ -35,6 +35,7 @@ export default function AppPage() {
     setGraph: setPersistedGraph,
     importHistory,
     setImportHistory,
+    isLoaded,
     clearStorage,
   } = useGraphPersistence();
 
@@ -49,10 +50,20 @@ export default function AppPage() {
     reset: resetHistory,
   } = useUndoRedo(persistedGraph);
 
-  // 当 graph 变化（undo/redo 或初始加载）时同步到持久化
+  // 当持久化从 localStorage 加载完成后，同步到撤销历史栈
+  // 这解决了刷新后已保存图谱不显示的问题
   useEffect(() => {
-    setPersistedGraph(graph);
-  }, [graph, setPersistedGraph]);
+    if (isLoaded) {
+      resetHistory(persistedGraph);
+    }
+  }, [isLoaded]); // 仅在 isLoaded 变化时执行一次
+
+  // 当 graph 变化（undo/redo 或操作）时同步到持久化
+  useEffect(() => {
+    if (isLoaded) {
+      setPersistedGraph(graph);
+    }
+  }, [graph, setPersistedGraph, isLoaded]);
 
   const [isImporting, setIsImporting] = useState(false);
   const [showImportInput, setShowImportInput] = useState(false);
@@ -129,7 +140,7 @@ export default function AppPage() {
 
   // ---- 导入流程 ----
   const handleImport = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<boolean> => {
       setIsImporting(true);
       setImportError(null);
       try {
@@ -172,10 +183,12 @@ export default function AppPage() {
           `已导入 ${extracted.nodes.length} 个概念和 ${extracted.edges.length} 个关联`,
           "success"
         );
+        return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "导入失败，请检查网络后重试";
         setImportError(msg);
         showToast(msg, "error");
+        return false;
       } finally {
         setIsImporting(false);
       }
@@ -222,8 +235,12 @@ export default function AppPage() {
 
   // ---- 导出图谱 ----
   const handleExport = useCallback(() => {
-    graphRef.current?.exportPNG("知识星图");
-    showToast("图谱已导出为 PNG 图片", "success");
+    const success = graphRef.current?.exportPNG("知识星图") ?? false;
+    if (success) {
+      showToast("图谱已导出为 PNG 图片", "success");
+    } else {
+      showToast("导出失败，请重试", "error");
+    }
   }, [showToast]);
 
   // ---- JSON 导出/导入 ----
@@ -393,8 +410,9 @@ export default function AppPage() {
         return;
       }
 
-      // Cmd/Ctrl + Shift + Z: 重做
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "z") {
+      // Cmd/Ctrl + Shift + Z 或 Ctrl + Y: 重做
+      if (((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "z") ||
+          ((e.ctrlKey || e.metaKey) && e.key === "y")) {
         e.preventDefault();
         if (canRedo) redo();
         return;

@@ -106,7 +106,7 @@ export default function NodeDetail({
         ? Math.round((groupDegree / groupEdges.length) * 100)
         : 0;
 
-    return { directCount, strengthPct, coreness };
+    return { directCount, strengthPct, coreness: Math.min(100, coreness) };
   }, [node, graph, related]);
 
   // 进入编辑模式时，用当前节点值填充编辑状态
@@ -118,7 +118,7 @@ export default function NodeDetail({
     setIsEditing(true);
   }, [node]);
 
-  // 保存编辑
+  // 保存编辑（显式保存，不依赖 blur）
   const saveEdit = useCallback(() => {
     if (!node) return;
     const updates: Partial<KnowledgeNode> = {};
@@ -137,36 +137,10 @@ export default function NodeDetail({
     setIsEditing(false);
   }, [node, editLabel, editDescription, editGroup, onNodeUpdate]);
 
-  // 取消编辑
+  // 取消编辑（回滚到节点原始值）
   const cancelEdit = useCallback(() => {
     setIsEditing(false);
   }, []);
-
-  // 标题输入框 blur 时保存
-  const handleLabelBlur = useCallback(() => {
-    if (node && editLabel.trim() && editLabel.trim() !== node.label) {
-      onNodeUpdate(node.id, { label: editLabel.trim() });
-    }
-  }, [node, editLabel, onNodeUpdate]);
-
-  // 描述 textarea blur 时保存
-  const handleDescriptionBlur = useCallback(() => {
-    if (node) {
-      const newDesc = editDescription || undefined;
-      if (newDesc !== node.description) {
-        onNodeUpdate(node.id, { description: newDesc });
-      }
-    }
-  }, [node, editDescription, onNodeUpdate]);
-
-  // 分组选择变化时立即保存
-  const handleGroupChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newGroup = e.target.value as NodeGroup;
-    setEditGroup(newGroup);
-    if (node && newGroup !== node.group) {
-      onNodeUpdate(node.id, { group: newGroup });
-    }
-  }, [node, onNodeUpdate]);
 
   if (!node || typeof document === "undefined") return null;
 
@@ -241,7 +215,7 @@ export default function NodeDetail({
             </button>
             <button
               onClick={onClose}
-              className="absolute right-4 top-4 rounded-full bg-space-700 p-1.5 text-star-dim transition-colors hover:text-star-white md:static md:rounded-none md:bg-transparent md:p-0"
+              className="rounded-lg p-1 text-star-dim transition-colors hover:text-star-white"
               aria-label="关闭"
             >
               <CloseIcon size={16} />
@@ -264,7 +238,6 @@ export default function NodeDetail({
                 type="text"
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
-                onBlur={handleLabelBlur}
                 className="flex-1 rounded-lg border border-space-500 bg-space-700 px-3 py-1.5 text-xl font-semibold text-star-white outline-none focus:border-node-blue/60"
                 autoFocus
               />
@@ -278,7 +251,7 @@ export default function NodeDetail({
             <div className="mt-2">
               <select
                 value={editGroup}
-                onChange={handleGroupChange}
+                onChange={(e) => setEditGroup(e.target.value as NodeGroup)}
                 className="rounded-lg border border-space-500 bg-space-700 px-3 py-1 text-xs font-medium text-star-white outline-none focus:border-node-blue/60"
               >
                 {GROUP_OPTIONS.map((g) => (
@@ -311,7 +284,6 @@ export default function NodeDetail({
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  onBlur={handleDescriptionBlur}
                   rows={4}
                   className="w-full rounded-lg border border-space-500 bg-space-700 px-3 py-2 text-sm leading-relaxed text-star-white outline-none focus:border-node-blue/60 resize-none"
                   placeholder="添加节点描述..."
