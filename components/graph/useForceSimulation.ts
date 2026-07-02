@@ -38,12 +38,33 @@ export function useForceSimulation(
   const isRunningRef = useRef(false);
   const nodeMapRef = useRef<Map<string, SimulationNode>>(new Map());
 
+  /** 计算每个节点的度数（连接数） */
+  const computeDegreeMap = (edges: KnowledgeEdge[]): Map<string, number> => {
+    const map = new Map<string, number>();
+    for (const e of edges) {
+      map.set(e.source, (map.get(e.source) || 0) + 1);
+      map.set(e.target, (map.get(e.target) || 0) + 1);
+    }
+    return map;
+  };
+
+  /** 根据度数计算节点大小，范围 [10, 30] */
+  const degreeToSize = (degree: number): number => 10 + Math.min(20, degree * 2);
+
+  /** 计算节点 size：优先使用外部合理值，否则按度数计算 */
+  const resolveSize = (nodeSize: number, degree: number): number => {
+    if (nodeSize >= 10 && nodeSize <= 30) return nodeSize;
+    return degreeToSize(degree);
+  };
+
   // 初始化全新节点：围绕画布中心随机散布
   const initNodes = (g: KnowledgeGraph, w: number, h: number): SimulationNode[] => {
     const cx = w / 2;
     const cy = h / 2;
+    const degreeMap = computeDegreeMap(g.edges);
     return g.nodes.map((n) => ({
       ...n,
+      size: resolveSize(n.size, degreeMap.get(n.id) || 0),
       x: cx + (Math.random() - 0.5) * Math.min(w, 400),
       y: cy + (Math.random() - 0.5) * Math.min(h, 400),
       vx: 0,
@@ -61,12 +82,14 @@ export function useForceSimulation(
     const cx = w / 2;
     const cy = h / 2;
     const existingMap = new Map(nodesRef.current.map((n) => [n.id, n]));
+    const degreeMap = computeDegreeMap(g.edges);
     return g.nodes.map((n) => {
       const existing = existingMap.get(n.id);
       if (existing) {
         // 保留位置和速度，更新属性（如 size/description 可能变化）
         return {
           ...n,
+          size: resolveSize(n.size, degreeMap.get(n.id) || 0),
           x: existing.x,
           y: existing.y,
           vx: existing.vx,
@@ -78,6 +101,7 @@ export function useForceSimulation(
       // 新节点：在画布中心附近随机散布
       return {
         ...n,
+        size: resolveSize(n.size, degreeMap.get(n.id) || 0),
         x: cx + (Math.random() - 0.5) * Math.min(w, 300),
         y: cy + (Math.random() - 0.5) * Math.min(h, 300),
         vx: 0,

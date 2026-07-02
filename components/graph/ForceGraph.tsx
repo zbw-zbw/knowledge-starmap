@@ -8,13 +8,17 @@ import {
   useCallback,
   useImperativeHandle,
 } from "react";
-import type { KnowledgeGraph, KnowledgeNode } from "@/lib/types";
+import type { KnowledgeGraph, KnowledgeNode, SimulationNode } from "@/lib/types";
+import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
 import { MAX_DPR, HIGHLIGHT_DURATION } from "@/lib/constants";
-import { PlusIcon, MinusIcon, ResetIcon, ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
+import { PlusIcon, MinusIcon, ResetIcon, ArrowLeftIcon, ArrowRightIcon, EdgeIcon, CloseIcon, ForceLayoutIcon, CircleLayoutIcon, GridLayoutIcon } from "@/components/ui/Icons";
+import { circularLayout, gridLayout } from "@/lib/layoutAlgorithms";
 import { useForceSimulation } from "./useForceSimulation";
 import { useGraphInteraction } from "./useGraphInteraction";
 import { renderGraph } from "./graphRenderer";
 import ContextMenu from "./ContextMenu";
+import MiniMap from "./MiniMap";
+import Legend from "./Legend";
 
 /** ForceGraph 暴露给父组件的命令式接口 */
 export interface ForceGraphHandle {
@@ -49,6 +53,10 @@ interface ForceGraphProps {
   onNodeEdit?: (node: KnowledgeNode) => void;
   /** 节点删除回调（右键菜单触发） */
   onNodeDelete?: (node: KnowledgeNode) => void;
+  /** 空白区域双击回调（用于手动创建节点） */
+  onCanvasDoubleClick?: (graphX: number, graphY: number) => void;
+  /** 手动创建边回调 */
+  onEdgeCreate?: (sourceId: string, targetId: string) => void;
 }
 
 /**
@@ -58,6 +66,8 @@ interface ForceGraphProps {
  * - requestAnimationFrame 驱动渲染（DPR 适配 Retina）
  * - 右下角缩放控制按钮
  * - 新导入节点 2 秒高亮闪烁效果
+ * - 悬停节点显示浮动 tooltip
+ * - 双击节点聚焦放大
  * - 通过 ref 暴露 focusNode 方法供搜索/详情面板调用
  */
 const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
@@ -76,6 +86,8 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       canRedo = false,
       onNodeEdit,
       onNodeDelete,
+      onCanvasDoubleClick,
+      onEdgeCreate,
     },
     ref
   ) {
@@ -91,14 +103,97 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
     const {
       hoveredNode,
       selectedNode,
+      draggedNode,
+      transform,
       transformRef,
       focusNode: focusNodeInternal,
       resetView,
       zoomBy,
+      panTo,
       setSelectedNode,
       contextMenu,
       setContextMenu,
+      mousePos,
+      setOnCanvasDoubleClick,
     } = useGraphInteraction(canvasRef, nodesRef, canvasSize, reheat);
+
+    // 同步外部双击回调到 hook
+    useEffect(() => {
+      setOnCanvasDoubleClick(onCanvasDoubleClick ?? null);
+    }, [onCanvasDoubleClick, setOnCanvasDoubleClick]);
+
+    // ---- 连线创建模式 ----
+    const [connectionMode, setConnectionMode] = useState(false);
+    const [connectionSource, setConnectionSource] = useState<SimulationNode | null>(null);
+    const [connectionMousePos, setConnectionMousePos] = useState<{ x: number; y: number } | null>(null);
+    const [activeLayout, setActiveLayout] = useState<"force" | "circular" | "grid">("force");
+    const [showLabels, setShowLabels] = useState(true);
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    // 连线模式下监听鼠标位置
+    useEffect(() => {
+      if (!connectionMode || !connectionSource) return;
+      const onMove = (e: MouseEvent) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        setConnectionMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      };
+      window.addEventListener("mousemove", onMove);
+      return () => window.removeEventListener("mousemove", onMove);
+    }, [connectionMode, connectionSource]);
+
+    // Esc 取消连线模式
+    useEffect(() => {
+      if (!connectionMode) return;
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          setConnectionMode(false);
+          setConnectionSource(null);
+          setConnectionMousePos(null);
+        }
+      };
+      window.addEventListener("keydown", handler);
+      return () => window.removeEventListener("keydown", handler);
+    }, [connectionMode]);
+
+    // 连线模式下覆盖节点点击行为
+    const handleConnectionNodeClick = useCallback((node: SimulationNode) => {
+      if (!connectionSource) {
+        // 第一个点击：选为源节点
+        setConnectionSource(node);
+      } else if (node.id !== connectionSource.id) {
+        // 第二个点击：创建边
+        onEdgeCreate?.(connectionSource.id, node.id);
+        setConnectionSource(null);
+        setConnectionMousePos(null);
+        setConnectionMode(false);
+      }
+    }, [connectionSource, onEdgeCreate]);
+
+    // 布局切换函数
+    const applyLayout = useCallback((type: "force" | "circular" | "grid") => {
+      setActiveLayout(type);
+      if (type === "force") {
+        reheat();
+        return;
+      }
+      const nodes = nodesRef.current;
+      if (nodes.length === 0) return;
+      const t = transformRef.current;
+      // 计算图谱中心（在图坐标中）
+      const cx = (canvasSize.width / 2 - t.x) / t.scale;
+      const cy = (canvasSize.height / 2 - t.y) / t.scale;
+      const radius = Math.min(canvasSize.width, canvasSize.height) * 0.35 / t.scale;
+
+      if (type === "circular") {
+        circularLayout(nodes, cx, cy, radius);
+      } else if (type === "grid") {
+        gridLayout(nodes, cx, cy, 80);
+      }
+      // 重置视图使布局居中
+      resetView(canvasSize.width, canvasSize.height);
+    }, [reheat, resetView, canvasSize, transformRef, nodesRef]);
 
     // hover/selected 变化时同步到 ref 供渲染循环读取
     const hoveredRef = useRef(hoveredNode);
@@ -108,8 +203,13 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
     }, [hoveredNode]);
     useEffect(() => {
       selectedRef.current = selectedNode;
+      // 连线模式下，节点点击用于选择连线端点，不触发普通选中
+      if (connectionMode && selectedNode) {
+        handleConnectionNodeClick(selectedNode);
+        return;
+      }
       onNodeSelect?.(selectedNode);
-    }, [selectedNode, onNodeSelect]);
+    }, [selectedNode, onNodeSelect, connectionMode, handleConnectionNodeClick]);
 
     // 外部 selectedNodeId 变化时同步内部状态：
     // 当外部清除选中（null）时，内部也需要清除，保持双向同步
@@ -121,6 +221,24 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
     useEffect(() => {
       onNodeHover?.(hoveredNode);
     }, [hoveredNode, onNodeHover]);
+
+    // 获取 canvas 相对容器的偏移（用于 tooltip 定位）
+    const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
+    useEffect(() => {
+      const updateRect = () => {
+        if (canvasRef.current) {
+          setCanvasRect(canvasRef.current.getBoundingClientRect());
+        }
+      };
+      updateRect();
+      const ro = new ResizeObserver(updateRect);
+      if (canvasRef.current) ro.observe(canvasRef.current);
+      window.addEventListener("scroll", updateRect, true);
+      return () => {
+        ro.disconnect();
+        window.removeEventListener("scroll", updateRect, true);
+      };
+    }, []);
 
     // 暴露命令式接口
     useImperativeHandle(
@@ -235,6 +353,12 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       visibleGroupsRef.current = visibleGroups;
     }, [visibleGroups]);
 
+    // 力模拟稳定状态存入 ref 供渲染循环读取（稳定后降帧）
+    const isStableRef = useRef(isStable);
+    useEffect(() => {
+      isStableRef.current = isStable;
+    }, [isStable]);
+
     // 渲染循环
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -250,11 +374,35 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       canvas.style.height = `${canvasSize.height}px`;
 
       let rafId: number;
+      let lastRenderTime = 0;
+      // 稳定状态下降帧：约 10fps（100ms 间隔）
+      const STABLE_FRAME_INTERVAL = 100;
+      // 检测是否有活跃交互（hover/drag/动画）
+      const hasInteraction = () => {
+        // 有 hover 节点时需要 60fps（tooltip 实时跟随）
+        if (hoveredRef.current) return true;
+        // 有拖拽中的节点时需要 60fps
+        if (draggedNode) return true;
+        // 有新节点高亮动画在进行时需要 60fps
+        if (highlightIdsRef.current.size > 0) return true;
+        // 力模拟未稳定时需要 60fps
+        if (!isStableRef.current) return true;
+        return false;
+      };
 
-      const render = () => {
+      const render = (timestamp: number) => {
+        const interactive = hasInteraction();
+        if (!interactive) {
+          // 稳定状态：降帧到 ~10fps
+          if (timestamp - lastRenderTime < STABLE_FRAME_INTERVAL) {
+            rafId = requestAnimationFrame(render);
+            return;
+          }
+        }
+        lastRenderTime = timestamp;
+
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // 将 highlightNodes（需保持高亮的节点）转换为 dimNodeIds（需变暗的节点）
         const hlSet = highlightNodesRef.current;
         let dimNodeIds: Set<string> | null = null;
         if (hlSet && hlSet.size > 0) {
@@ -266,7 +414,6 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
           }
         }
 
-        // visibleGroups Set -> 传给 renderer
         const vgSet = visibleGroupsRef.current;
 
         renderGraph(
@@ -280,56 +427,247 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
           canvasSize.height,
           highlightIdsRef.current.size > 0 ? highlightIdsRef.current : null,
           dimNodeIds,
-          vgSet
+          vgSet,
+          showLabels
         );
         rafId = requestAnimationFrame(render);
       };
-      render();
+      rafId = requestAnimationFrame(render);
 
       return () => cancelAnimationFrame(rafId);
-    }, [edges, canvasSize, nodesRef, transformRef, highlightVersion]);
+    }, [edges, canvasSize, nodesRef, transformRef, highlightVersion, draggedNode, showLabels]);
 
     const handleReset = useCallback(() => {
       resetView(canvasSize.width, canvasSize.height);
       setSelectedNode(null);
     }, [resetView, canvasSize, setSelectedNode]);
 
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer.types.includes("Files")) {
+        setIsDragOver(true);
+      }
+    }, []);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 仅当离开容器时才隐藏
+      if (e.currentTarget === e.target) {
+        setIsDragOver(false);
+      }
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        // 触发自定义事件，由 page.tsx 处理
+        window.dispatchEvent(
+          new CustomEvent("knowledge-starmap:file-drop", { detail: { file } })
+        );
+      }
+    }, []);
+
+    const isGraphEmpty = graph.nodes.length === 0;
+
+    // 计算 tooltip 位置
+    const tooltipNode = hoveredNode && !selectedNode ? hoveredNode : null;
+    const tooltipScreenPos = tooltipNode && mousePos && canvasRect
+      ? { x: mousePos.x, y: mousePos.y }
+      : null;
+
     return (
       <div
         ref={containerRef}
-        className={`graph-grid-bg relative h-full w-full overflow-hidden ${className}`}
+        className={`relative h-full w-full overflow-hidden ${className}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <canvas
           ref={canvasRef}
           className="block h-full w-full touch-none"
-          style={{ cursor: "grab" }}
+          style={{
+            cursor: connectionMode
+              ? "crosshair"
+              : draggedNode
+              ? "grabbing"
+              : hoveredNode
+              ? "pointer"
+              : "grab",
+          }}
         />
 
-        {/* 右下角缩放控制 */}
-        <div className="absolute bottom-20 right-4 flex flex-col gap-2 md:bottom-4">
-          {/* 撤销/重做按钮 */}
-          {(onUndo || onRedo) && (
-            <div className="flex gap-2">
-              <button
-                onClick={onUndo}
-                disabled={!canUndo}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="撤销"
-                title="撤销 (Cmd+Z)"
-              >
-                <ArrowLeftIcon size={18} />
-              </button>
-              <button
-                onClick={onRedo}
-                disabled={!canRedo}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="重做"
-                title="重做 (Cmd+Shift+Z)"
-              >
-                <ArrowRightIcon size={18} />
-              </button>
+        {/* 拖拽导入提示 */}
+        {isDragOver && (
+          <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-node-blue/10 backdrop-blur-[2px]">
+            <div className="rounded-2xl border-2 border-dashed border-node-blue/50 bg-space-800/80 px-8 py-6 text-center">
+              <div className="mb-2 text-3xl">📥</div>
+              <p className="text-sm font-medium text-node-blue">释放以导入文件</p>
+              <p className="mt-1 text-xs text-star-dim">支持 JSON 图谱文件</p>
             </div>
+          </div>
+        )}
+
+        {/* 悬停 tooltip */}
+        {tooltipNode && tooltipScreenPos && typeof document !== "undefined" && (
+          <div
+            className="pointer-events-none absolute z-30 animate-fade-in"
+            style={{
+              left: Math.min(tooltipScreenPos.x + 16, canvasSize.width - 200),
+              top: Math.max(tooltipScreenPos.y - 48, 8),
+            }}
+          >
+            <div className="rounded-lg border border-space-500/80 bg-space-800/95 px-3 py-2 shadow-xl backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: GROUP_COLORS[tooltipNode.group],
+                    boxShadow: `0 0 6px ${GROUP_COLORS[tooltipNode.group]}`,
+                  }}
+                />
+                <span className="text-sm font-medium text-star-white">
+                  {tooltipNode.label}
+                </span>
+                <span className="shrink-0 text-[10px] text-star-dim/70">
+                  {GROUP_LABELS[tooltipNode.group]}
+                </span>
+              </div>
+              {tooltipNode.description && (
+                <p className="mt-1 max-w-[220px] line-clamp-2 text-xs text-star-dim/80">
+                  {tooltipNode.description}
+                </p>
+              )}
+              <div className="mt-1.5 text-[10px] text-star-dim/40">
+                双击聚焦 · 单击查看详情
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 连线模式指示器 + 连线 */}
+        {connectionMode && (
+          <>
+            {/* 顶部提示条 */}
+            <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 animate-fade-in">
+              <div className="flex items-center gap-2 rounded-full border border-node-blue/40 bg-space-800/90 px-4 py-1.5 shadow-lg backdrop-blur-sm">
+                <EdgeIcon size={14} className="text-node-blue" />
+                <span className="text-xs text-star-white">
+                  {connectionSource
+                    ? "点击另一个节点完成连线"
+                    : "点击起始节点"}
+                </span>
+                <button
+                  onClick={() => {
+                    setConnectionMode(false);
+                    setConnectionSource(null);
+                    setConnectionMousePos(null);
+                  }}
+                  className="ml-1 text-star-dim hover:text-star-white"
+                >
+                  <CloseIcon size={12} />
+                </button>
+              </div>
+            </div>
+            {/* SVG 连线 */}
+            {connectionSource && connectionMousePos && (() => {
+              const t = transformRef.current;
+              const sx = connectionSource.x * t.scale + t.x;
+              const sy = connectionSource.y * t.scale + t.y;
+              return (
+                <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+                  <line
+                    x1={sx} y1={sy}
+                    x2={connectionMousePos.x} y2={connectionMousePos.y}
+                    stroke="rgba(79,195,247,0.6)"
+                    strokeWidth="2"
+                    strokeDasharray="6 4"
+                  />
+                  <circle cx={sx} cy={sy} r="8" fill="none" stroke="rgba(79,195,247,0.8)" strokeWidth="2">
+                    <animate attributeName="r" values="6;12;6" dur="1.5s" repeatCount="infinite" />
+                    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="infinite" />
+                  </circle>
+                </svg>
+              );
+            })()}
+          </>
+        )}
+
+        {/* 右下角缩放控制 */}
+        <div className="absolute bottom-20 right-4 flex flex-col items-center gap-1.5 md:bottom-4">
+          {/* 连线模式按钮 */}
+          {onEdgeCreate && (
+            <button
+              onClick={() => {
+                setConnectionMode((prev) => !prev);
+                setConnectionSource(null);
+                setConnectionMousePos(null);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border backdrop-blur-sm transition-all active:scale-95 ${
+                connectionMode
+                  ? "border-node-blue/60 bg-node-blue/20 text-node-blue shadow-[0_0_12px_rgba(79,195,247,0.3)]"
+                  : "border-space-500 bg-space-700/80 text-star-white hover:border-node-blue/60 hover:bg-space-600/80"
+              }`}
+              aria-label="连线模式"
+              title="创建连线（点击两个节点）"
+            >
+              <EdgeIcon size={18} />
+            </button>
           )}
+          {/* 布局切换 */}
+          <div className="mb-1 flex gap-1">
+            <button
+              onClick={() => applyLayout("force")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border backdrop-blur-sm transition-all active:scale-95 ${
+                activeLayout === "force"
+                  ? "border-node-blue/60 bg-node-blue/20 text-node-blue"
+                  : "border-space-500 bg-space-700/80 text-star-white hover:border-node-blue/60"
+              }`}
+              title="力导向布局"
+            >
+              <ForceLayoutIcon size={16} />
+            </button>
+            <button
+              onClick={() => applyLayout("circular")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border backdrop-blur-sm transition-all active:scale-95 ${
+                activeLayout === "circular"
+                  ? "border-node-blue/60 bg-node-blue/20 text-node-blue"
+                  : "border-space-500 bg-space-700/80 text-star-white hover:border-node-blue/60"
+              }`}
+              title="环形布局"
+            >
+              <CircleLayoutIcon size={16} />
+            </button>
+            <button
+              onClick={() => applyLayout("grid")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border backdrop-blur-sm transition-all active:scale-95 ${
+                activeLayout === "grid"
+                  ? "border-node-blue/60 bg-node-blue/20 text-node-blue"
+                  : "border-space-500 bg-space-700/80 text-star-white hover:border-node-blue/60"
+              }`}
+              title="网格布局"
+            >
+              <GridLayoutIcon size={16} />
+            </button>
+          </div>
+          {/* 标签显示开关 */}
+          <button
+            onClick={() => setShowLabels((prev) => !prev)}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg border backdrop-blur-sm transition-all active:scale-95 text-xs font-bold ${
+              showLabels
+                ? "border-node-blue/60 bg-node-blue/20 text-node-blue"
+                : "border-space-500 bg-space-700/80 text-star-dim"
+            }`}
+            title={showLabels ? "隐藏标签" : "显示标签"}
+          >
+            Aa
+          </button>
           <button
             onClick={() => zoomBy(1.2, canvasSize.width, canvasSize.height)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
@@ -337,6 +675,10 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
           >
             <PlusIcon size={18} />
           </button>
+          {/* 缩放百分比显示 */}
+          <div className="flex h-7 w-9 items-center justify-center rounded-md bg-space-700/60 text-[11px] font-medium tabular-nums text-star-dim/80 backdrop-blur-sm">
+            {Math.round(transform.scale * 100)}%
+          </div>
           <button
             onClick={() => zoomBy(1 / 1.2, canvasSize.width, canvasSize.height)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-white backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 active:scale-95"
@@ -348,11 +690,28 @@ const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
             onClick={handleReset}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-space-500 bg-space-700/80 text-star-dim backdrop-blur-sm transition-all hover:border-node-blue/60 hover:bg-space-600/80 hover:text-star-white active:scale-95"
             aria-label="重置视图"
-            title="重置视图"
+            title="重置视图 (Cmd+0)"
           >
             <ResetIcon size={16} />
           </button>
         </div>
+
+        {/* 图例（桌面端，节点数 > 0 时显示） */}
+        {!isGraphEmpty && (
+          <div className="absolute left-4 top-4 z-10 hidden md:block">
+            <Legend />
+          </div>
+        )}
+
+        {/* 小地图概览（桌面端，节点数 ≤ 200 时显示） */}
+        <MiniMap
+          nodesRef={nodesRef}
+          edges={edges}
+          transformRef={transformRef}
+          canvasSize={canvasSize}
+          visibleGroups={visibleGroups ?? null}
+          onNavigate={(gx, gy) => panTo(gx, gy, canvasSize.width, canvasSize.height)}
+        />
 
         {/* 右键上下文菜单 */}
         {contextMenu && onNodeEdit && onNodeDelete && (() => {

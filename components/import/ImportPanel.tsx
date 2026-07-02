@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TextInput from "./TextInput";
 import SampleTexts from "./SampleTexts";
 import ImportProgress from "./ImportProgress";
@@ -21,6 +21,8 @@ interface ImportPanelProps {
  * - 展开时显示文本输入区 + 示例文本 + 提取按钮
  * - 导入中显示进度遮罩
  * - 错误信息显示在底部
+ * - 监听 knowledge-starmap:restore-text 全局事件，
+ *   允许外部（如导入历史）将文本恢复到输入框
  */
 export default function ImportPanel({
   showImportInput,
@@ -31,6 +33,19 @@ export default function ImportPanel({
   importError,
 }: ImportPanelProps) {
   const [text, setText] = useState("");
+
+  // 监听外部「恢复文本」事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail === "string") {
+        setText(detail);
+      }
+    };
+    window.addEventListener("knowledge-starmap:restore-text", handler);
+    return () =>
+      window.removeEventListener("knowledge-starmap:restore-text", handler);
+  }, []);
 
   const handleSubmit = async () => {
     if (text.trim().length === 0) return;

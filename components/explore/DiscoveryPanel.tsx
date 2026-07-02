@@ -11,6 +11,7 @@ import {
   SparkleIcon,
   WarningIcon,
   CheckIcon,
+  UnlinkIcon,
 } from "@/components/ui/Icons";
 import type { IconProps } from "@/components/ui/Icons";
 import type { ComponentType } from "react";
@@ -65,6 +66,25 @@ export default function DiscoveryPanel({
     }
   };
 
+  // 批量操作：找出所有可添加（带 suggestedEdges 且未添加过）的发现
+  const addableDiscoveries = discoveries.filter(
+    (d) => d.suggestedEdges && d.suggestedEdges.length > 0 && !addedIds.has(d.id)
+  );
+  const pendingCount = addableDiscoveries.length;
+
+  const handleAcceptAll = () => {
+    addableDiscoveries.forEach((d) => {
+      if (d.suggestedEdges && d.suggestedEdges.length > 0) {
+        onAddEdges(d.suggestedEdges);
+        setAddedIds((prev) => new Set(prev).add(d.id));
+      }
+    });
+  };
+
+  const handleIgnoreAll = () => {
+    addableDiscoveries.forEach((d) => onIgnore(d.id));
+  };
+
   return (
     <div>
       <div className="mb-3 flex items-center gap-1.5">
@@ -116,7 +136,38 @@ export default function DiscoveryPanel({
 
       {/* 发现结果列表 */}
       {!isDiscovering && discoveries.length > 0 && (
-        <div className="mt-3 space-y-2">
+        <>
+          {/* 批量操作栏：仅在有可添加项时显示 */}
+          {pendingCount > 0 && (
+            <div
+              className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-space-500/50 bg-space-700/40 px-3 py-2"
+              style={{ animation: "fadeInUp 250ms ease-out both" }}
+            >
+              <span className="text-xs text-star-dim">
+                {pendingCount} 项可批量处理
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleAcceptAll}
+                  className="flex items-center gap-1 rounded-md bg-node-blue/20 px-2 py-1 text-xs font-medium text-node-blue transition-all hover:bg-node-blue/30"
+                  title="接受所有可添加的发现"
+                >
+                  <CheckIcon size={12} />
+                  全部接受
+                </button>
+                <button
+                  onClick={handleIgnoreAll}
+                  className="flex items-center gap-1 rounded-md border border-space-500 px-2 py-1 text-xs text-star-dim transition-all hover:border-red-400/40 hover:text-red-300"
+                  title="忽略所有可处理的发现"
+                >
+                  <UnlinkIcon size={12} />
+                  全部忽略
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 space-y-2">
           {discoveries.map((discovery, idx) => {
             const meta = DISCOVERY_META[discovery.type];
             const isAdded = addedIds.has(discovery.id);
@@ -206,7 +257,8 @@ export default function DiscoveryPanel({
               </div>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {/* 空状态 */}

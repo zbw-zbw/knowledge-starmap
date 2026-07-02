@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect, type RefObject } from "react";
+import Link from "next/link";
 import type {
   KnowledgeGraph,
   KnowledgeNode,
@@ -8,7 +9,9 @@ import type {
   Discovery,
   KnowledgeEdge,
 } from "@/lib/types";
+import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
 import { SITE } from "@/lib/constants";
+import { computeDegreeMap } from "@/lib/graphUtils";
 import ForceGraph, { type ForceGraphHandle } from "@/components/graph/ForceGraph";
 import ImportPanel from "@/components/import/ImportPanel";
 import ImportHistory from "@/components/import/ImportHistory";
@@ -16,6 +19,8 @@ import SearchBar from "@/components/explore/SearchBar";
 import DomainFilter from "@/components/explore/DomainFilter";
 import NodeDetail from "@/components/explore/NodeDetail";
 import DiscoveryPanel from "@/components/explore/DiscoveryPanel";
+import RecentNodes from "@/components/explore/RecentNodes";
+import CreateNodeModal from "@/components/explore/CreateNodeModal";
 import EmptyState from "@/components/ui/EmptyState";
 import MobileToolbar, { type MobileSheetType } from "@/components/app/MobileToolbar";
 import {
@@ -27,6 +32,8 @@ import {
   CloseIcon,
   ChevronDownIcon,
   DownloadIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
 } from "@/components/ui/Icons";
 
 interface AppLayoutProps {
@@ -70,6 +77,35 @@ interface AppLayoutProps {
   // JSON 导出/导入
   onExportJSON: () => void;
   onImportJSONTrigger: () => void;
+  // 聚焦节点
+  onFocusNode?: (nodeId: string) => void;
+  // 上下节点导航
+  onPrevNode?: () => void;
+  onNextNode?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  // 领域筛选：仅显示 / 全部 / 反选
+  onShowOnlyGroup: (group: string) => void;
+  onShowAllGroups: () => void;
+  onInvertGroups: () => void;
+  // 导入历史
+  onRestoreFromHistory: (id: string) => void;
+  onDeleteHistoryItem: (id: string) => void;
+  onClearHistory: () => void;
+  // 最近浏览节点
+  recentNodes: KnowledgeNode[];
+  onClearRecentNodes: () => void;
+  // 手动创建节点
+  onNodeCreate: (data: { label: string; description?: string; group: import("@/lib/types").NodeGroup }) => void;
+  // 手动创建边
+  onEdgeCreate: (sourceId: string, targetId: string) => void;
+  // 路径查找
+  pathHighlightNodes?: Set<string> | null;
+  onStartPathFind?: (nodeId: string) => void;
+  isPathFindMode?: boolean;
+  // 边编辑/删除
+  onEdgeDelete?: (sourceId: string, targetId: string) => void;
+  onEdgeUpdate?: (sourceId: string, targetId: string, newRelation: string) => void;
 }
 
 /**
@@ -114,20 +150,72 @@ export default function AppLayout(props: AppLayoutProps) {
     onNodeDelete,
     onExportJSON,
     onImportJSONTrigger,
+    onFocusNode,
+    onPrevNode,
+    onNextNode,
+    hasPrev,
+    hasNext,
+    onShowOnlyGroup,
+    onShowAllGroups,
+    onInvertGroups,
+    onRestoreFromHistory,
+    onDeleteHistoryItem,
+    onClearHistory,
+    recentNodes,
+    onClearRecentNodes,
+    onNodeCreate,
+    onEdgeCreate,
+    pathHighlightNodes,
+    onStartPathFind,
+    isPathFindMode,
+    onEdgeDelete,
+    onEdgeUpdate,
   } = props;
 
   const [mobileSheet, setMobileSheet] = useState<MobileSheetType>(null);
+  const [showCreateNode, setShowCreateNode] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("starmap-sidebar-collapsed") === "true"; } catch { return false; }
+  });
   const isGraphEmpty = graph.nodes.length === 0;
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
-  // 统计信息
+  // 切换侧边栏折叠状态
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("starmap-sidebar-collapsed", String(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  // 统计信息（含领域分布 + 度数排行）
   const stats = useMemo(() => {
     const groupCount = new Set(graph.nodes.map((n) => n.group)).size;
+    // 领域分布
+    const groupDistribution = new Map<string, number>();
+    for (const n of graph.nodes) {
+      groupDistribution.set(n.group, (groupDistribution.get(n.group) || 0) + 1);
+    }
+    const domainBars = Array.from(groupDistribution.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([group, count]) => ({ group, count, pct: Math.round((count / Math.max(1, graph.nodes.length)) * 100) }));
+    // 度数排行 Top5
+    const degreeMap = computeDegreeMap(graph.edges);
+    const topDegree = Array.from(degreeMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([nodeId, degree]) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        return { nodeId, degree, label: node?.label ?? nodeId, group: node?.group ?? "general" };
+      });
     return {
       nodes: graph.nodes.length,
       edges: graph.edges.length,
       groups: groupCount,
+      domainBars,
+      topDegree,
     };
   }, [graph]);
 
@@ -158,12 +246,16 @@ export default function AppLayout(props: AppLayoutProps) {
     <div className="flex h-full flex-col">
       {/* 标题区域 */}
       <div className="px-5 py-5">
-        <div className="flex items-center gap-2">
-          <SparkleIcon size={18} className="text-node-blue" />
-          <span className="text-lg font-semibold text-star-white">
+        <Link
+          href="/"
+          className="group flex items-center gap-2"
+          title="返回首页"
+        >
+          <SparkleIcon size={18} className="text-node-blue transition-transform duration-200 group-hover:scale-110" />
+          <span className="text-lg font-semibold text-star-white transition-colors group-hover:text-node-blue">
             {SITE.name}
           </span>
-        </div>
+        </Link>
         <p className="mt-1 text-xs text-star-dim">
           让你的知识像星空一样可见
         </p>
@@ -179,6 +271,18 @@ export default function AppLayout(props: AppLayoutProps) {
             onSearchChange={onSearchChange}
           />
         </div>
+
+        {/* 最近浏览节点 */}
+        {recentNodes.length > 0 && (
+          <div className="mb-5">
+            <RecentNodes
+              nodes={recentNodes}
+              activeNodeId={selectedNodeId ?? null}
+              onNavigate={onNavigateNode}
+              onClear={onClearRecentNodes}
+            />
+          </div>
+        )}
 
         {/* 导入面板 */}
         <div className="mb-5">
@@ -202,6 +306,58 @@ export default function AppLayout(props: AppLayoutProps) {
             <StatCard label="关系" value={stats.edges} />
             <StatCard label="领域" value={stats.groups} />
           </div>
+          {/* 领域分布条形图 */}
+          {stats.domainBars.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {stats.domainBars.map(({ group, count, pct }) => (
+                <div key={group} className="flex items-center gap-2">
+                  <span className="w-12 shrink-0 truncate text-[11px] text-star-dim" title={GROUP_LABELS[group]}>
+                    {GROUP_LABELS[group]}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-space-600/50">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: GROUP_COLORS[group as keyof typeof GROUP_COLORS] || "#4fc3f7",
+                        boxShadow: `0 0 6px ${GROUP_COLORS[group as keyof typeof GROUP_COLORS] || "#4fc3f7"}40`,
+                      }}
+                    />
+                  </div>
+                  <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-star-dim">
+                    {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* 度数排行 Top5 */}
+          {stats.topDegree.length > 0 && (
+            <div className="mt-3">
+              <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-star-dim/60">
+                连接排行 Top5
+              </h4>
+              <div className="space-y-1">
+                {stats.topDegree.map(({ nodeId, degree, label, group }, idx) => (
+                  <div key={nodeId} className="flex items-center gap-2 rounded-md px-1 py-0.5">
+                    <span className="w-4 text-center text-[10px] font-bold text-star-dim/50">
+                      {idx + 1}
+                    </span>
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: GROUP_COLORS[group as keyof typeof GROUP_COLORS] || "#4fc3f7" }}
+                    />
+                    <span className="flex-1 truncate text-[11px] text-star-white/80">
+                      {label}
+                    </span>
+                    <span className="text-[10px] tabular-nums text-node-blue/80">
+                      {degree}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 导入历史 */}
@@ -210,7 +366,12 @@ export default function AppLayout(props: AppLayoutProps) {
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-star-dim">
               导入历史
             </h3>
-            <ImportHistory history={importHistory} />
+            <ImportHistory
+              history={importHistory}
+              onRestore={onRestoreFromHistory}
+              onDelete={onDeleteHistoryItem}
+              onClearAll={onClearHistory}
+            />
           </div>
         )}
 
@@ -232,14 +393,14 @@ export default function AppLayout(props: AppLayoutProps) {
         {!isGraphEmpty && (
           <div className="mb-5 flex gap-2">
             {/* 导出下拉 */}
-            <div className="relative flex-1" ref={exportDropdownRef}>
+            <div className="relative flex-1 min-w-0" ref={exportDropdownRef}>
               <button
                 onClick={() => setShowExportDropdown((prev) => !prev)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-space-500 px-3 py-2 text-sm whitespace-nowrap text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
               >
                 <DownloadIcon size={16} />
-                导出
-                <ChevronDownIcon size={14} />
+                <span className="truncate">导出</span>
+                <ChevronDownIcon size={14} className="shrink-0" />
               </button>
               {showExportDropdown && (
                 <div className="absolute left-0 top-full z-10 mt-1 w-full overflow-hidden rounded-lg border border-space-500 bg-space-700 shadow-lg">
@@ -266,16 +427,16 @@ export default function AppLayout(props: AppLayoutProps) {
             </div>
             <button
               onClick={onImportJSONTrigger}
-              className="flex-1 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+              className="flex-1 min-w-0 rounded-xl border border-space-500 px-3 py-2 text-sm whitespace-nowrap text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
             >
-              导入 JSON
+              <span className="truncate">导入 JSON</span>
             </button>
             <button
               onClick={handleClear}
               disabled={isImporting}
-              className="flex-1 rounded-xl border border-space-500 px-4 py-2 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-1 min-w-0 rounded-xl border border-space-500 px-3 py-2 text-sm whitespace-nowrap text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              清空图谱
+              <span className="truncate">清空图谱</span>
             </button>
           </div>
         )}
@@ -300,6 +461,9 @@ export default function AppLayout(props: AppLayoutProps) {
           graph={graph}
           visibleGroups={visibleGroups}
           onToggle={onToggleGroup}
+          onShowOnly={onShowOnlyGroup}
+          onShowAll={onShowAllGroups}
+          onInvert={onInvertGroups}
         />
       </div>
     </div>
@@ -351,14 +515,29 @@ export default function AppLayout(props: AppLayoutProps) {
           </div>
 
           {mobileSheet === "search" && (
-            <SearchBar
-              graph={graph}
-              onSelectNode={(node) => {
-                onSelectNodeFromSearch(node);
-                setMobileSheet(null);
-              }}
-              onSearchChange={onSearchChange}
-            />
+            <>
+              <SearchBar
+                graph={graph}
+                onSelectNode={(node) => {
+                  onSelectNodeFromSearch(node);
+                  setMobileSheet(null);
+                }}
+                onSearchChange={onSearchChange}
+              />
+              {recentNodes.length > 0 && (
+                <div className="mt-3">
+                  <RecentNodes
+                    nodes={recentNodes}
+                    activeNodeId={selectedNodeId ?? null}
+                    onNavigate={(node) => {
+                      onNavigateNode(node);
+                      setMobileSheet(null);
+                    }}
+                    onClear={onClearRecentNodes}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {mobileSheet === "import" && (
@@ -407,6 +586,9 @@ export default function AppLayout(props: AppLayoutProps) {
                   graph={graph}
                   visibleGroups={visibleGroups}
                   onToggle={onToggleGroup}
+                  onShowOnly={onShowOnlyGroup}
+                  onShowAll={onShowAllGroups}
+                  onInvert={onInvertGroups}
                 />
               </div>
               {/* 导入历史 */}
@@ -415,7 +597,12 @@ export default function AppLayout(props: AppLayoutProps) {
                   <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-star-dim">
                     导入历史
                   </h4>
-                  <ImportHistory history={importHistory} />
+                  <ImportHistory
+                  history={importHistory}
+                  onRestore={onRestoreFromHistory}
+                  onDelete={onDeleteHistoryItem}
+                  onClearAll={onClearHistory}
+                />
                 </div>
               )}
               {/* 导出 + 清空 */}
@@ -423,14 +610,14 @@ export default function AppLayout(props: AppLayoutProps) {
                 <div className="flex gap-2">
                   <button
                     onClick={onExport}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-space-500 px-4 py-2.5 text-sm whitespace-nowrap text-star-dim transition-all hover:border-node-blue/40 hover:text-node-blue active:scale-95"
                   >
                     导出
                   </button>
                   <button
                     onClick={handleClear}
                     disabled={isImporting}
-                    className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm whitespace-nowrap text-star-dim transition-all hover:border-red-400/40 hover:text-red-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     清空
                   </button>
@@ -450,11 +637,89 @@ export default function AppLayout(props: AppLayoutProps) {
     );
   };
 
+  // 折叠态侧边栏（仅图标按钮）
+  const CollapsedSidebar = (
+    <div className="flex h-full flex-col items-center py-4">
+      {/* 折叠切换按钮 */}
+      <button
+        onClick={toggleSidebar}
+        className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg text-star-dim transition-all hover:bg-space-700 hover:text-node-blue"
+        title="展开侧边栏"
+      >
+        <PanelLeftOpenIcon size={18} />
+      </button>
+      {/* Logo */}
+      <Link href="/" className="mb-4 flex h-9 w-9 items-center justify-center" title="返回首页">
+        <SparkleIcon size={18} className="text-node-blue" />
+      </Link>
+      {/* 快捷操作图标 */}
+      <div className="flex flex-1 flex-col items-center gap-2">
+        <button
+          onClick={() => { toggleSidebar(); }}
+          className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-star-dim transition-all hover:bg-space-700 hover:text-node-blue"
+          title="搜索"
+        >
+          <SearchIcon size={18} />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-space-700 px-2 py-1 text-xs text-star-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            搜索
+          </span>
+        </button>
+        <button
+          onClick={() => { toggleSidebar(); setShowImportInput(true); }}
+          className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-star-dim transition-all hover:bg-space-700 hover:text-node-blue"
+          title="导入"
+        >
+          <ImportIcon size={18} />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-space-700 px-2 py-1 text-xs text-star-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            导入
+          </span>
+        </button>
+        <button
+          onClick={() => { toggleSidebar(); }}
+          className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-star-dim transition-all hover:bg-space-700 hover:text-node-blue"
+          title="发现"
+        >
+          <DiscoverIcon size={18} />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-space-700 px-2 py-1 text-xs text-star-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            发现
+          </span>
+        </button>
+      </div>
+      {/* 底部统计迷你显示 */}
+      <div className="mt-auto flex flex-col items-center gap-1.5 border-t border-space-600/30 pt-3">
+        <div className="flex h-8 w-8 flex-col items-center justify-center rounded-lg bg-space-700/50">
+          <span className="text-xs font-bold tabular-nums text-node-blue">{stats.nodes}</span>
+          <span className="text-[8px] leading-none text-star-dim">节点</span>
+        </div>
+        <button
+          onClick={toggleSidebar}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-star-dim transition-all hover:bg-space-700 hover:text-star-white"
+          title="设置"
+        >
+          <SettingsIcon size={16} />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-space-900">
-      {/* 左侧面板 - 桌面端 */}
-      <aside className="hidden w-80 shrink-0 bg-space-800/80 md:flex md:flex-col">
-        {PanelContent}
+      {/* 左侧面板 - 桌面端（支持折叠/展开过渡动画） */}
+      <aside
+        className="hidden relative shrink-0 bg-space-800/80 transition-all duration-300 ease-in-out md:flex md:flex-col"
+        style={{ width: sidebarCollapsed ? 56 : 320 }}
+      >
+        {sidebarCollapsed ? CollapsedSidebar : PanelContent}
+        {/* 折叠/展开切换按钮（悬浮在侧边栏右边缘） */}
+        {!sidebarCollapsed && (
+          <button
+            onClick={toggleSidebar}
+            className="absolute right-0 top-1/2 z-10 -translate-y-1/2 translate-x-1/2 flex h-8 w-5 items-center justify-center rounded-r-md border border-l-0 border-space-500/50 bg-space-700/80 text-star-dim backdrop-blur-sm transition-all hover:bg-space-600 hover:text-node-blue"
+            title="收起侧边栏"
+          >
+            <PanelLeftCloseIcon size={14} />
+          </button>
+        )}
       </aside>
 
       {/* 右侧图谱区域 */}
@@ -499,6 +764,8 @@ export default function AppLayout(props: AppLayoutProps) {
             canRedo={canRedo}
             onNodeEdit={(node) => onNodeSelect(node)}
             onNodeDelete={(node) => onNodeDelete(node.id)}
+            onCanvasDoubleClick={() => setShowCreateNode(true)}
+            onEdgeCreate={onEdgeCreate}
           />
         )}
 
@@ -517,6 +784,26 @@ export default function AppLayout(props: AppLayoutProps) {
         onNavigateNode={onNavigateNode}
         onNodeUpdate={onNodeUpdate}
         onNodeDelete={onNodeDelete}
+        onFocusNode={onFocusNode}
+        onPrevNode={onPrevNode}
+        onNextNode={onNextNode}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        pathHighlightNodes={pathHighlightNodes}
+        onStartPathFind={onStartPathFind}
+        isPathFindMode={isPathFindMode}
+        onEdgeDelete={onEdgeDelete}
+        onEdgeUpdate={onEdgeUpdate}
+      />
+
+      {/* 手动创建节点弹窗 */}
+      <CreateNodeModal
+        open={showCreateNode}
+        onClose={() => setShowCreateNode(false)}
+        onCreate={(data) => {
+          onNodeCreate(data);
+          setShowCreateNode(false);
+        }}
       />
     </div>
   );

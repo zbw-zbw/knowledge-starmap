@@ -1,31 +1,40 @@
-import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
+"use client";
 
-interface LegendProps {
-  className?: string;
-}
+import { useState } from "react";
+import { GROUP_COLORS, GROUP_LABELS } from "@/lib/types";
+import { ChevronDownIcon } from "@/components/ui/Icons";
 
 /**
- * 图例组件：水平排列展示各分组颜色与名称，融入深色主题。
+ * 图例组件：可收起/展开
  */
-export default function Legend({ className = "" }: LegendProps) {
-  const groups = Object.keys(GROUP_COLORS);
+export default function Legend() {
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-space-500/50 bg-space-700/60 px-4 py-2.5 backdrop-blur-sm ${className}`}
-    >
-      {groups.map((group) => (
-        <div key={group} className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{
-              backgroundColor: GROUP_COLORS[group],
-              boxShadow: `0 0 6px ${GROUP_COLORS[group]}`,
-            }}
-          />
-          <span className="text-xs text-star-dim">{GROUP_LABELS[group]}</span>
+    <div className="rounded-lg border border-space-500/40 bg-space-800/80 backdrop-blur-sm">
+      <button
+        onClick={() => setCollapsed((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-star-dim transition-colors hover:text-star-white"
+      >
+        <span>图例</span>
+        <ChevronDownIcon
+          size={14}
+          className={`transition-transform ${collapsed ? "" : "rotate-180"}`}
+        />
+      </button>
+      {!collapsed && (
+        <div className="space-y-1.5 px-3 pb-3">
+          {Object.entries(GROUP_COLORS).map(([key, color]) => (
+            <div key={key} className="flex items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}` }}
+              />
+              <span className="text-xs text-star-dim">{GROUP_LABELS[key]}</span>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

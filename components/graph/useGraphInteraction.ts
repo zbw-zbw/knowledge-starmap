@@ -15,8 +15,15 @@ interface UseGraphInteractionReturn {
   focusNode: (nodeId: string, width: number, height: number) => void;
   resetView: (width: number, height: number) => void;
   zoomBy: (factor: number, width: number, height: number) => void;
+  /** 平移画布使指定图坐标点居中 */
+  panTo: (graphX: number, graphY: number, width: number, height: number) => void;
   contextMenu: { x: number; y: number; nodeId: string } | null;
   setContextMenu: (menu: { x: number; y: number; nodeId: string } | null) => void;
+  /** 鼠标在 canvas 上的位置（用于 tooltip 定位） */
+  mousePos: { x: number; y: number } | null;
+  /** 空白区域双击事件（用于手动创建节点） */
+  onCanvasDoubleClick: ((graphX: number, graphY: number) => void) | null;
+  setOnCanvasDoubleClick: (cb: ((graphX: number, graphY: number) => void) | null) => void;
 }
 
 interface PanState {
@@ -27,9 +34,10 @@ interface PanState {
 }
 
 const DRAG_THRESHOLD = 4; // 像素，小于此位移视为点击
+const DOUBLE_CLICK_DELAY = 300; // 双击判定间隔（毫秒）
 
 /**
- * 图谱交互 Hook：处理拖拽节点、平移画布、缩放、hover、点击选中。
+ * 图谱交互 Hook：处理拖拽节点、平移画布、缩放、hover、点击选中、双击聚焦。
  * 所有事件监听在内部通过 useEffect 挂载，自动清理。
  */
 export function useGraphInteraction(
@@ -49,6 +57,12 @@ export function useGraphInteraction(
   const [selectedNode, setSelectedNode] = useState<SimulationNode | null>(null);
   const [draggedNode, setDraggedNode] = useState<SimulationNode | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  // 空白区域双击回调（供外部设置，用于创建节点）
+  const [onCanvasDoubleClick, setOnCanvasDoubleClick] = useState<((graphX: number, graphY: number) => void) | null>(null);
+  const onCanvasDoubleClickRef = useRef(onCanvasDoubleClick);
+  useEffect(() => { onCanvasDoubleClickRef.current = onCanvasDoubleClick; }, [onCanvasDoubleClick]);
+  const lastEmptyClickTime = useRef<number>(0);
 
   // 内部状态 ref（供事件回调读取最新值，避免闭包陷阱）
   const draggedNodeRef = useRef<SimulationNode | null>(null);
@@ -59,6 +73,11 @@ export function useGraphInteraction(
   const dragStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
   const focusAnimRef = useRef<number | null>(null);
+  const lastClickTime = useRef<number>(0);
+  const lastClickNode = useRef<SimulationNode | null>(null);
+  // 触摸双击检测
+  const lastTapTime = useRef<number>(0);
+  const lastTapNode = useRef<SimulationNode | null>(null);
 
   // 双指缩放状态
   const pinchState = useRef({
@@ -115,12 +134,69 @@ export function useGraphInteraction(
     return { x: clientX - rect.left, y: clientY - rect.top };
   }, [canvasRef]);
 
+  /**
+   * 平滑聚焦到指定节点：用 requestAnimationFrame 插值 transform，
+   * 让目标节点在约 500ms 内移动到画布中心并适当放大。
+   */
+  const focusNode = useCallback(
+    (nodeId: string, width: number, height: number) => {
+      const nodes = nodesRef.current;
+      const target = nodes.find((n) => n.id === nodeId);
+      if (!target || width === 0) return;
+
+      // 取消正在进行的聚焦动画
+      if (focusAnimRef.current !== null) {
+        cancelAnimationFrame(focusAnimRef.current);
+        focusAnimRef.current = null;
+      }
+
+      // 关闭右键菜单
+      setContextMenu(null);
+
+      const startTransform = { ...transformRef.current };
+      // 目标缩放：当前缩放与 1.8 取较大值，但不超 MAX_SCALE
+      const targetScale = Math.min(MAX_SCALE, Math.max(transformRef.current.scale, 1.8));
+      // 让节点居中：稍微向上偏移以留出详情面板空间
+      const targetX = width / 2 - target.x * targetScale;
+      const targetY = height / 2 - target.y * targetScale - 40;
+
+      const startTime = performance.now();
+
+      const animate = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / FOCUS_ANIMATION_DURATION);
+        // easeInOutCubic
+        const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        setTransform({
+          scale: startTransform.scale + (targetScale - startTransform.scale) * eased,
+          x: startTransform.x + (targetX - startTransform.x) * eased,
+          y: startTransform.y + (targetY - startTransform.y) * eased,
+        });
+
+        if (t < 1) {
+          focusAnimRef.current = requestAnimationFrame(animate);
+        } else {
+          focusAnimRef.current = null;
+        }
+      };
+      focusAnimRef.current = requestAnimationFrame(animate);
+
+      // 同时选中该节点
+      setSelectedNode(target);
+    },
+    [nodesRef, setTransform]
+  );
+
   // ---- 鼠标事件 ----
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const onMouseDown = (e: MouseEvent) => {
+      // 关闭右键菜单
+      setContextMenu(null);
+
       const pos = getCanvasPos(e.clientX, e.clientY);
       dragStartPos.current = pos;
       hasMoved.current = false;
@@ -151,6 +227,8 @@ export function useGraphInteraction(
 
     const onMouseMove = (e: MouseEvent) => {
       const pos = getCanvasPos(e.clientX, e.clientY);
+      // 更新鼠标位置（用于 tooltip）
+      setMousePos({ x: pos.x, y: pos.y });
 
       // 检测是否超过拖拽阈值
       if (
@@ -189,7 +267,7 @@ export function useGraphInteraction(
       canvas.style.cursor = node ? "pointer" : "grab";
     };
 
-    const onMouseUp = (e: MouseEvent) => {
+    const onMouseUp = (_e: MouseEvent) => {
       if (isDraggingNode.current && draggedNodeRef.current) {
         // 释放节点
         const node = draggedNodeRef.current;
@@ -198,7 +276,26 @@ export function useGraphInteraction(
 
         // 未移动则视为点击选中
         if (!hasMoved.current) {
-          setSelectedNode(node);
+          // 双击检测
+          const now = Date.now();
+          if (
+            lastClickNode.current?.id === node.id &&
+            now - lastClickTime.current < DOUBLE_CLICK_DELAY
+          ) {
+            // 双击：聚焦到该节点
+            focusNode(node.id, canvasSize.width, canvasSize.height);
+            lastClickTime.current = 0;
+            lastClickNode.current = null;
+          } else {
+            // 单击：选中
+            setSelectedNode(node);
+            lastClickTime.current = now;
+            lastClickNode.current = node;
+          }
+        } else {
+          // 拖动了，重置双击状态
+          lastClickTime.current = 0;
+          lastClickNode.current = null;
         }
         isDraggingNode.current = false;
         draggedNodeRef.current = null;
@@ -209,6 +306,18 @@ export function useGraphInteraction(
         // 未移动则视为点击空白 -> 取消选中
         if (!hasMoved.current) {
           setSelectedNode(null);
+          lastClickTime.current = 0;
+          lastClickNode.current = null;
+          // 空白区域双击检测（用于创建节点）
+          const now = Date.now();
+          if (now - lastEmptyClickTime.current < DOUBLE_CLICK_DELAY) {
+            const pos = dragStartPos.current;
+            const { x: gx, y: gy } = screenToGraph(pos.x, pos.y);
+            onCanvasDoubleClickRef.current?.(gx, gy);
+            lastEmptyClickTime.current = 0;
+          } else {
+            lastEmptyClickTime.current = now;
+          }
         }
       }
     };
@@ -237,6 +346,7 @@ export function useGraphInteraction(
     const onLeave = () => {
       if (!isDraggingNode.current && !isPanning.current) {
         setHoveredNode(null);
+        setMousePos(null);
         canvas.style.cursor = "default";
       }
     };
@@ -268,7 +378,7 @@ export function useGraphInteraction(
       canvas.removeEventListener("mouseleave", onLeave);
       canvas.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [canvasRef, getCanvasPos, hitTest, screenToGraph, setTransform, reheat]);
+  }, [canvasRef, getCanvasPos, hitTest, screenToGraph, setTransform, reheat, canvasSize, focusNode]);
 
   // ---- 触摸事件 ----
   useEffect(() => {
@@ -276,6 +386,9 @@ export function useGraphInteraction(
     if (!canvas) return;
 
     const onTouchStart = (e: TouchEvent) => {
+      // 关闭右键菜单
+      setContextMenu(null);
+
       // 双指：开始 pinch-to-zoom
       if (e.touches.length === 2) {
         // 取消正在进行的拖拽或平移
@@ -358,7 +471,6 @@ export function useGraphInteraction(
 
         // 以双指中点为中心缩放
         const ps = pinchState.current;
-        // 缩放前中点对应的图谱坐标
         const graphX = (ps.midX - ps.startTransformX) / ps.startScale;
         const graphY = (ps.midY - ps.startTransformY) / ps.startScale;
 
@@ -406,13 +518,13 @@ export function useGraphInteraction(
       }
     };
 
-    const onTouchEnd = (e: TouchEvent) => {
+    const onTouchEnd = (_e: TouchEvent) => {
       // 双指松开：结束 pinch
-      if (isPinching.current && e.touches.length < 2) {
+      if (isPinching.current && _e.touches.length < 2) {
         isPinching.current = false;
         // 如果还有一指，转为单指平移
-        if (e.touches.length === 1) {
-          const touch = e.touches[0];
+        if (_e.touches.length === 1) {
+          const touch = _e.touches[0];
           const pos = getCanvasPos(touch.clientX, touch.clientY);
           isPanning.current = true;
           panState.current = {
@@ -430,7 +542,20 @@ export function useGraphInteraction(
         node.fx = null;
         node.fy = null;
         if (!hasMoved.current) {
-          setSelectedNode(node);
+          // 触摸双击检测
+          const now = Date.now();
+          if (
+            lastTapNode.current?.id === node.id &&
+            now - lastTapTime.current < DOUBLE_CLICK_DELAY
+          ) {
+            focusNode(node.id, canvasSize.width, canvasSize.height);
+            lastTapTime.current = 0;
+            lastTapNode.current = null;
+          } else {
+            setSelectedNode(node);
+            lastTapTime.current = now;
+            lastTapNode.current = node;
+          }
         }
         isDraggingNode.current = false;
         draggedNodeRef.current = null;
@@ -453,58 +578,7 @@ export function useGraphInteraction(
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [canvasRef, getCanvasPos, hitTest, screenToGraph, setTransform, reheat]);
-
-  /**
-   * 平滑聚焦到指定节点：用 requestAnimationFrame 插值 transform，
-   * 让目标节点在约 500ms 内移动到画布中心并适当放大。
-   */
-  const focusNode = useCallback(
-    (nodeId: string, width: number, height: number) => {
-      const nodes = nodesRef.current;
-      const target = nodes.find((n) => n.id === nodeId);
-      if (!target || width === 0) return;
-
-      // 取消正在进行的聚焦动画
-      if (focusAnimRef.current !== null) {
-        cancelAnimationFrame(focusAnimRef.current);
-        focusAnimRef.current = null;
-      }
-
-      const startTransform = { ...transformRef.current };
-      // 目标缩放：当前缩放与 1.5 取较大值，但不超 MAX_SCALE
-      const targetScale = Math.min(MAX_SCALE, Math.max(transformRef.current.scale, 1.5));
-      // 让节点居中： x = width/2 - node.x * scale
-      const targetX = width / 2 - target.x * targetScale;
-      const targetY = height / 2 - target.y * targetScale;
-
-      const startTime = performance.now();
-
-      const animate = (now: number) => {
-        const elapsed = now - startTime;
-        const t = Math.min(1, elapsed / FOCUS_ANIMATION_DURATION);
-        // easeInOutCubic
-        const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-        setTransform({
-          scale: startTransform.scale + (targetScale - startTransform.scale) * eased,
-          x: startTransform.x + (targetX - startTransform.x) * eased,
-          y: startTransform.y + (targetY - startTransform.y) * eased,
-        });
-
-        if (t < 1) {
-          focusAnimRef.current = requestAnimationFrame(animate);
-        } else {
-          focusAnimRef.current = null;
-        }
-      };
-      focusAnimRef.current = requestAnimationFrame(animate);
-
-      // 同时选中该节点
-      setSelectedNode(target);
-    },
-    [nodesRef, setTransform]
-  );
+  }, [canvasRef, getCanvasPos, hitTest, screenToGraph, setTransform, reheat, canvasSize, focusNode]);
 
   // 组件卸载时清理聚焦动画
   useEffect(() => {
@@ -551,6 +625,7 @@ export function useGraphInteraction(
         x: width / 2 - cx * scale,
         y: height / 2 - cy * scale,
       });
+      setContextMenu(null);
     },
     [nodesRef, setTransform]
   );
@@ -574,6 +649,19 @@ export function useGraphInteraction(
     [setTransform]
   );
 
+  /** 平移画布使指定图坐标点出现在画布中心 */
+  const panTo = useCallback(
+    (graphX: number, graphY: number, width: number, height: number) => {
+      const t = transformRef.current;
+      setTransform({
+        scale: t.scale,
+        x: width / 2 - graphX * t.scale,
+        y: height / 2 - graphY * t.scale,
+      });
+    },
+    [setTransform]
+  );
+
   return {
     hoveredNode,
     selectedNode,
@@ -584,7 +672,11 @@ export function useGraphInteraction(
     focusNode,
     resetView,
     zoomBy,
+    panTo,
     contextMenu,
     setContextMenu,
+    mousePos,
+    onCanvasDoubleClick,
+    setOnCanvasDoubleClick,
   };
 }

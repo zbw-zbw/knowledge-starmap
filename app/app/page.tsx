@@ -21,7 +21,11 @@ import { useConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useGraphPersistence } from "@/lib/useGraphPersistence";
 import { useUndoRedo } from "@/lib/useUndoRedo";
 import { exportGraphJSON, importGraphJSON } from "@/lib/useGraphExport";
+import { searchMatch } from "@/lib/fuzzySearch";
+import { computeDegreeMap, degreeToSize } from "@/lib/graphUtils";
+import { findShortestPath } from "@/lib/shortestPath";
 import ShortcutPanel from "@/components/ui/ShortcutPanel";
+import SpotlightSearch from "@/components/explore/SpotlightSearch";
 
 /**
  * 主应用页面：力导向知识图谱可视化工作台。
@@ -69,8 +73,12 @@ export default function AppPage() {
   const [showImportInput, setShowImportInput] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Spotlight 全局搜索
+  const [showSpotlight, setShowSpotlight] = useState(false);
+
   // 探索功能状态
   const [selectedNode, setSelectedNode] = useState<KnowledgeNode | null>(null);
+  const [recentNodes, setRecentNodes] = useState<KnowledgeNode[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleGroups, setVisibleGroups] = useState<Set<string>>(
     new Set(Object.keys(GROUP_COLORS))
@@ -81,6 +89,10 @@ export default function AppPage() {
   const [discoveryHoverNodes, setDiscoveryHoverNodes] = useState<string[] | null>(
     null
   );
+
+  // 路径查找状态
+  const [pathFindSource, setPathFindSource] = useState<string | null>(null);
+  const [pathHighlight, setPathHighlight] = useState<Set<string> | null>(null);
 
   // Toast 轻提示
   const { toasts, showToast, dismissToast } = useToast();
@@ -118,25 +130,44 @@ export default function AppPage() {
 
   // ---- 计算高亮节点集合（搜索 / discovery hover）----
   const highlightNodes = useMemo(() => {
+    // 路径高亮优先
+    if (pathHighlight && pathHighlight.size > 0) {
+      return pathHighlight;
+    }
     if (discoveryHoverNodes && discoveryHoverNodes.length > 0) {
       return new Set(discoveryHoverNodes);
     }
     if (searchQuery.trim().length > 0) {
-      const q = searchQuery.trim().toLowerCase();
+      const q = searchQuery.trim();
       const matched = new Set<string>();
       for (const node of graph.nodes) {
-        if (
-          node.label.toLowerCase().includes(q) ||
-          (node.description?.toLowerCase().includes(q) ?? false) ||
-          node.id.toLowerCase().includes(q)
-        ) {
+        if (searchMatch(node.label, node.description, node.id, q)) {
           matched.add(node.id);
         }
       }
       return matched.size > 0 ? matched : new Set<string>();
     }
     return null;
-  }, [searchQuery, discoveryHoverNodes, graph.nodes]);
+  }, [pathHighlight, searchQuery, discoveryHoverNodes, graph.nodes]);
+
+  // ---- 节点度数自适应大小 ----
+  useEffect(() => {
+    const degreeMap = computeDegreeMap(graph.edges);
+    const needsUpdate = graph.nodes.some((n) => {
+      const degree = degreeMap.get(n.id) || 0;
+      const expectedSize = degreeToSize(degree);
+      return Math.abs(n.size - expectedSize) > 1;
+    });
+    if (needsUpdate) {
+      pushGraph((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) => {
+          const degree = degreeMap.get(n.id) || 0;
+          return { ...n, size: degreeToSize(degree) };
+        }),
+      }));
+    }
+  }, [graph.edges.length]); // 仅当边数量变化时重新计算
 
   // ---- 导入流程 ----
   const handleImport = useCallback(
@@ -233,6 +264,40 @@ export default function AppPage() {
     showToast("已重新加载示例数据", "success");
   }, [resetHistory, setImportHistory, showToast]);
 
+  // 删除单条导入历史
+  const handleDeleteHistoryItem = useCallback(
+    (id: string) => {
+      setImportHistory((prev) => prev.filter((item) => item.id !== id));
+    },
+    [setImportHistory]
+  );
+
+  // 清空导入历史
+  const handleClearHistory = useCallback(() => {
+    setImportHistory([]);
+  }, [setImportHistory]);
+
+  // 清空最近浏览
+  const handleClearRecentNodes = useCallback(() => {
+    setRecentNodes([]);
+  }, []);
+
+  // 从历史中快速回填文本到输入框
+  const handleRestoreFromHistory = useCallback(
+    (id: string) => {
+      const item = importHistory.find((i) => i.id === id);
+      if (!item) return;
+      // 派发全局事件，由 ImportPanel 监听并填充文本
+      window.dispatchEvent(
+        new CustomEvent("knowledge-starmap:restore-text", { detail: item.text })
+      );
+      setShowImportInput(true);
+      setImportError(null);
+      showToast("已恢复文本到输入框", "info");
+    },
+    [importHistory, showToast]
+  );
+
   // ---- 导出图谱 ----
   const handleExport = useCallback(() => {
     const success = graphRef.current?.exportPNG("知识星图") ?? false;
@@ -273,17 +338,87 @@ export default function AppPage() {
     }
   }, [handleImportJSON]);
 
+  // 监听画布文件拖拽事件
+  useEffect(() => {
+    const handleFileDrop = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const file = detail?.file as File;
+      if (!file) return;
+
+      if (file.name.endsWith(".json")) {
+        // JSON 文件：使用现有的 JSON 导入逻辑
+        importGraphJSON(file).then((data) => {
+          requestConfirm(
+            { title: "导入图谱数据？", message: `导入将替换当前图谱数据（${data.graph.nodes.length} 个节点）。`, confirmText: "导入", cancelText: "取消" },
+            () => {
+              resetHistory(data.graph);
+              if (data.importHistory) setImportHistory(data.importHistory);
+              setSelectedNode(null);
+              showToast(`已导入 ${data.graph.nodes.length} 个节点`, "success");
+            }
+          );
+        }).catch((err) => {
+          showToast(err instanceof Error ? err.message : "导入失败", "error");
+        });
+      } else if (file.type.startsWith("text/")) {
+        // 文本文件：读取内容后用 AI 提取
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result as string;
+          handleImport(text);
+        };
+        reader.readAsText(file);
+      } else {
+        showToast("不支持的文件类型，请拖入 JSON 或文本文件", "error");
+      }
+    };
+    window.addEventListener("knowledge-starmap:file-drop", handleFileDrop);
+    return () => window.removeEventListener("knowledge-starmap:file-drop", handleFileDrop);
+  }, [requestConfirm, resetHistory, setImportHistory, showToast, handleImport]);
+
   // ---- 探索功能 ----
-  const handleNodeSelect = useCallback((node: KnowledgeNode | null) => {
-    setSelectedNode(node);
-  }, []);
+
+  // selectedNode 变化时更新最近浏览历史（去重，最新在前，最多 8 个）
+  useEffect(() => {
+    if (!selectedNode) return;
+    setRecentNodes((prev) => {
+      const filtered = prev.filter((n) => n.id !== selectedNode.id);
+      return [selectedNode, ...filtered].slice(0, 8);
+    });
+  }, [selectedNode]);
 
   const handleSelectNodeFromSearch = useCallback((node: KnowledgeNode) => {
+    // 选中节点（打开详情面板）并聚焦
+    setSelectedNode(node);
     graphRef.current?.focusNode(node.id);
   }, []);
 
   const handleNavigateNode = useCallback((node: KnowledgeNode) => {
+    setSelectedNode(node);
     graphRef.current?.focusNode(node.id);
+  }, []);
+
+  // 当前节点在图谱中的前/后节点（用于详情面板的导航按钮与 Alt+↑/↓）
+  const { prevNode, nextNode } = useMemo(() => {
+    if (!selectedNode) return { prevNode: null, nextNode: null };
+    const idx = graph.nodes.findIndex((n) => n.id === selectedNode.id);
+    if (idx === -1) return { prevNode: null, nextNode: null };
+    return {
+      prevNode: idx > 0 ? graph.nodes[idx - 1] : null,
+      nextNode: idx < graph.nodes.length - 1 ? graph.nodes[idx + 1] : null,
+    };
+  }, [selectedNode, graph.nodes]);
+
+  const handlePrevNode = useCallback(() => {
+    if (prevNode) handleNavigateNode(prevNode);
+  }, [prevNode, handleNavigateNode]);
+
+  const handleNextNode = useCallback(() => {
+    if (nextNode) handleNavigateNode(nextNode);
+  }, [nextNode, handleNavigateNode]);
+
+  const handleFocusNode = useCallback((nodeId: string) => {
+    graphRef.current?.focusNode(nodeId);
   }, []);
 
   const handleSearchChange = useCallback((query: string) => {
@@ -301,6 +436,26 @@ export default function AppPage() {
         next.add(group);
       }
       return next;
+    });
+  }, []);
+
+  // 仅显示指定分组（其它全部隐藏）
+  const handleShowOnlyGroup = useCallback((group: string) => {
+    setVisibleGroups(new Set([group]));
+  }, []);
+
+  // 全部显示（图谱中实际存在的所有分组）
+  const handleShowAllGroups = useCallback(() => {
+    setVisibleGroups(new Set(Object.keys(GROUP_COLORS)));
+  }, []);
+
+  // 反选：激活的隐藏、非激活的显示；至少保留一个
+  const handleInvertGroups = useCallback(() => {
+    setVisibleGroups((prev) => {
+      const all = Object.keys(GROUP_COLORS);
+      const inverted = all.filter((g) => !prev.has(g));
+      // 至少保留一个：若全选反转后为空，则全选
+      return new Set(inverted.length > 0 ? inverted : all);
     });
   }, []);
 
@@ -360,6 +515,88 @@ export default function AppPage() {
     setDiscoveryHoverNodes(nodeIds);
   }, []);
 
+  // ---- 手动创建边 ----
+  const handleCreateEdge = useCallback((sourceId: string, targetId: string) => {
+    // 检查是否已存在
+    const exists = graph.edges.some(
+      (e) => e.source === sourceId && e.target === targetId
+    );
+    if (exists) {
+      showToast("该连线已存在", "info");
+      return;
+    }
+    const sourceNode = graph.nodes.find((n) => n.id === sourceId);
+    const targetNode = graph.nodes.find((n) => n.id === targetId);
+    pushGraph((prev) => ({
+      ...prev,
+      edges: [
+        ...prev.edges,
+        {
+          source: sourceId,
+          target: targetId,
+          relation: "关联",
+        },
+      ],
+    }));
+    showToast(
+      `已连接「${sourceNode?.label ?? sourceId}」→「${targetNode?.label ?? targetId}」`,
+      "success"
+    );
+  }, [graph.edges, graph.nodes, pushGraph, showToast]);
+
+  // ---- 路径查找 ----
+  const handleStartPathFind = useCallback((sourceId: string) => {
+    if (pathFindSource === sourceId) {
+      setPathFindSource(null);
+      setPathHighlight(null);
+    } else {
+      setPathFindSource(sourceId);
+      setPathHighlight(null);
+      // 关闭当前详情面板让用户选择目标
+      setSelectedNode(null);
+    }
+  }, [pathFindSource]);
+
+  const handlePathFindSelect = useCallback((targetNode: KnowledgeNode) => {
+    if (!pathFindSource || !targetNode) return;
+    const path = findShortestPath(pathFindSource, targetNode.id, graph.edges);
+    if (path) {
+      setPathHighlight(new Set(path));
+      setSelectedNode(targetNode);
+      showToast(`找到路径：经过 ${path.length - 2} 个中间节点`, "success");
+    } else {
+      setPathHighlight(null);
+      setSelectedNode(targetNode);
+      showToast("两个节点之间不存在路径", "info");
+    }
+    setPathFindSource(null);
+  }, [pathFindSource, graph.edges, showToast]);
+
+  const handleNodeSelect = useCallback((node: KnowledgeNode | null) => {
+    if (node && pathFindSource) {
+      handlePathFindSelect(node);
+      return;
+    }
+    setSelectedNode(node);
+  }, [pathFindSource, handlePathFindSelect]);
+
+  // ---- 手动创建节点 ----
+  const handleCreateNode = useCallback((data: { label: string; description?: string; group: import("@/lib/types").NodeGroup }) => {
+    const id = `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newNode: KnowledgeNode = {
+      id,
+      label: data.label,
+      description: data.description,
+      group: data.group,
+      size: 10,
+    };
+    pushGraph((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, newNode],
+    }));
+    showToast(`已创建节点「${data.label}」`, "success");
+  }, [pushGraph, showToast]);
+
   // ---- 节点编辑/删除 ----
   const handleUpdateNode = useCallback((id: string, updates: Partial<KnowledgeNode>) => {
     pushGraph((prev) => ({
@@ -386,13 +623,10 @@ export default function AppPage() {
   // ---- 键盘快捷键 ----
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K: 聚焦搜索框
+      // Cmd/Ctrl + K: 打开 Spotlight 全局搜索
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        const input = searchInputRef.current?.querySelector("input");
-        if (input) {
-          input.focus();
-        }
+        setShowSpotlight((prev) => !prev);
         return;
       }
 
@@ -420,6 +654,11 @@ export default function AppPage() {
 
       // Escape: 关闭面板
       if (e.key === "Escape") {
+        if (pathFindSource) {
+          setPathFindSource(null);
+          setPathHighlight(null);
+          return;
+        }
         if (showImportInput) {
           setShowImportInput(false);
         } else if (selectedNode) {
@@ -438,7 +677,7 @@ export default function AppPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showImportInput, selectedNode, handleExport, canUndo, canRedo, undo, redo]);
+  }, [pathFindSource, showImportInput, selectedNode, handleExport, canUndo, canRedo, undo, redo]);
 
   return (
     <>
@@ -492,6 +731,61 @@ export default function AppPage() {
           // JSON 导出/导入
           onExportJSON={handleExportJSON}
           onImportJSONTrigger={() => fileInputRef.current?.click()}
+          // 聚焦节点
+          onFocusNode={handleFocusNode}
+          // 上下节点导航
+          onPrevNode={handlePrevNode}
+          onNextNode={handleNextNode}
+          hasPrev={!!prevNode}
+          hasNext={!!nextNode}
+          // 领域筛选
+          onShowOnlyGroup={handleShowOnlyGroup}
+          onShowAllGroups={handleShowAllGroups}
+          onInvertGroups={handleInvertGroups}
+          // 导入历史
+          onRestoreFromHistory={handleRestoreFromHistory}
+          onDeleteHistoryItem={handleDeleteHistoryItem}
+          onClearHistory={handleClearHistory}
+          // 最近浏览节点
+          recentNodes={recentNodes}
+          onClearRecentNodes={handleClearRecentNodes}
+          // 手动创建节点
+          onNodeCreate={handleCreateNode}
+          // 手动创建边
+          onEdgeCreate={handleCreateEdge}
+          // 路径查找
+          pathHighlightNodes={pathHighlight}
+          onStartPathFind={handleStartPathFind}
+          isPathFindMode={pathFindSource !== null}
+          // 边编辑/删除
+          onEdgeDelete={(sourceId, targetId) => {
+            const sourceNode = graph.nodes.find((n) => n.id === sourceId);
+            const targetNode = graph.nodes.find((n) => n.id === targetId);
+            const deletedEdge = graph.edges.find(
+              (e) => e.source === sourceId && e.target === targetId
+            );
+            pushGraph((prev) => ({
+              ...prev,
+              edges: prev.edges.filter(
+                (e) => !(e.source === sourceId && e.target === targetId)
+              ),
+            }));
+            showToast(
+              `已删除「${sourceNode?.label ?? sourceId}」→「${targetNode?.label ?? targetId}」的连线（Ctrl+Z 撤销）`,
+              "info"
+            );
+          }}
+          onEdgeUpdate={(sourceId, targetId, newRelation) => {
+            pushGraph((prev) => ({
+              ...prev,
+              edges: prev.edges.map((e) =>
+                e.source === sourceId && e.target === targetId
+                  ? { ...e, relation: newRelation }
+                  : e
+              ),
+            }));
+            showToast("关系已更新", "success");
+          }}
         />
       </div>
 
@@ -503,6 +797,17 @@ export default function AppPage() {
 
       {/* 快捷键帮助面板 */}
       <ShortcutPanel />
+
+      {/* Spotlight 全局搜索 */}
+      <SpotlightSearch
+        graph={graph}
+        onSelectNode={(node) => {
+          handleSelectNodeFromSearch(node);
+          setShowSpotlight(false);
+        }}
+        open={showSpotlight}
+        onClose={() => setShowSpotlight(false)}
+      />
 
       {/* 首次使用引导 */}
       {onboardingStep === 1 && (

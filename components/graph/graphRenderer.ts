@@ -49,6 +49,7 @@ function computeRelated(
  * @param highlightNodeIds 新导入节点的高亮集合（脉冲闪烁效果），null 表示无高亮
  * @param dimNodeIds 需要变暗的节点 id 集合（搜索/筛选时非匹配节点变暗），null 表示不变暗
  * @param visibleGroups 可见分组集合，null 表示全部可见
+ * @param showLabels 是否绘制节点名称标签，默认 true
  */
 export function renderGraph(
   ctx: CanvasRenderingContext2D,
@@ -61,7 +62,8 @@ export function renderGraph(
   canvasHeight: number,
   highlightNodeIds: Set<string> | null = null,
   dimNodeIds: Set<string> | null = null,
-  visibleGroups: Set<string> | null = null
+  visibleGroups: Set<string> | null = null,
+  showLabels: boolean = true
 ): void {
   // 1. 清空画布 —— 填充深空背景（当前已在 CSS 像素空间）
   ctx.fillStyle = COLORS.space[900];
@@ -243,31 +245,48 @@ export function renderGraph(
     // 发光效果（hover / 选中 / 新节点）
     if (isHighlight) {
       ctx.save();
-      // hover 时节点略微放大
-      const hoverScale = isHighlight && !isSelected ? 1.25 : 1.1;
+      // hover 时节点略微放大；选中时也放大但幅度稍小
+      const hoverScale = isHighlight && !isSelected ? 1.35 : 1.15;
       const drawR = r * hoverScale;
+      // 外层光晕
       ctx.shadowColor = color;
-      ctx.shadowBlur = isHighlight && !isSelected ? 24 / transform.scale : 20 / transform.scale;
+      ctx.shadowBlur = isHighlight && !isSelected ? 28 / transform.scale : 22 / transform.scale;
       ctx.fillStyle = hexToRgba(color, alpha);
       ctx.beginPath();
       ctx.arc(node.x, node.y, drawR, 0, Math.PI * 2);
       ctx.fill();
-      // 外圈光晕
-      ctx.shadowBlur = isHighlight && !isSelected ? 36 / transform.scale : 32 / transform.scale;
-      ctx.strokeStyle = hexToRgba(color, isHighlight && !isSelected ? 0.5 : 0.4);
-      ctx.lineWidth = 2 / transform.scale;
+      // 外圈光晕环
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = hexToRgba(color, isHighlight && !isSelected ? 0.6 : 0.45);
+      ctx.lineWidth = (isHighlight && !isSelected ? 2.5 : 2) / transform.scale;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, drawR + (isHighlight && !isSelected ? 3 : 2) / transform.scale, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
       // 选中节点（非 hover）的扩散环动画
       if (isSelected) {
-        const ringR = r + (ringPhase * 24) / transform.scale;
-        const ringAlpha = (1 - ringPhase) * 0.35;
+        const ringR = r + (ringPhase * 28) / transform.scale;
+        const ringAlpha = (1 - ringPhase) * 0.4;
         ctx.save();
         ctx.strokeStyle = hexToRgba(color, ringAlpha);
         ctx.lineWidth = 2 / transform.scale;
         ctx.beginPath();
         ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // hover 节点（非选中）的快速脉冲环
+      if (!isSelected) {
+        const hoverPulsePhase = (Date.now() % 800) / 800;
+        const pulseR = drawR + hoverPulsePhase * 16 / transform.scale;
+        const pulseAlpha = (1 - hoverPulsePhase) * 0.35;
+        ctx.save();
+        ctx.strokeStyle = hexToRgba(color, pulseAlpha);
+        ctx.lineWidth = 1.5 / transform.scale;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, pulseR, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -289,48 +308,51 @@ export function renderGraph(
     }
   }
 
-  // 5. 绘制标签（节点名称）
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  for (const node of nodes) {
-    if (!isVisible(node.x, node.y)) continue;
+  // 5. 绘制标签（节点名称）—— 受 showLabels 开关控制
+  if (showLabels) {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (const node of nodes) {
+      if (!isVisible(node.x, node.y)) continue;
 
-    const r = nodeRadius(node);
-    const isHighlight = node.id === highlightId;
-    const isSelected = selectedNode?.id === node.id;
-    const isHoverHighlight = isHighlight && !isSelected;
-    const drawR = isHighlight ? r * (isHoverHighlight ? 1.25 : 1.1) : r;
-    const isRelated = relatedNodeIds.has(node.id);
-    const hasHighlight = highlightId !== null;
-    const isNewNode = highlightNodeIds?.has(node.id) ?? false;
-    const isGroupHidden = visibleGroups ? !visibleGroups.has(node.group) : false;
-    const isDimmed = dimNodeIds ? dimNodeIds.has(node.id) : false;
+      const r = nodeRadius(node);
+      const isHighlight = node.id === highlightId;
+      const isSelected = selectedNode?.id === node.id;
+      const isHoverHighlight = isHighlight && !isSelected;
+      const hoverScale = isHoverHighlight ? 1.35 : isHighlight ? 1.15 : 1;
+      const drawR = r * hoverScale;
+      const isRelated = relatedNodeIds.has(node.id);
+      const hasHighlight = highlightId !== null;
+      const isNewNode = highlightNodeIds?.has(node.id) ?? false;
+      const isGroupHidden = visibleGroups ? !visibleGroups.has(node.group) : false;
+      const isDimmed = dimNodeIds ? dimNodeIds.has(node.id) : false;
 
-    // 隐藏分组不显示标签
-    if (isGroupHidden) continue;
+      // 隐藏分组不显示标签
+      if (isGroupHidden) continue;
 
-    // 显示规则：大节点默认显示；小节点仅 hover/选中/新节点时显示
-    const showLabel =
-      isHighlight ||
-      isNewNode ||
-      node.size >= LABEL_SIZE_THRESHOLD ||
-      (hasHighlight && isRelated && node.size >= 12);
+      // 显示规则：大节点默认显示；小节点仅 hover/选中/新节点时显示
+      const showLabel =
+        isHighlight ||
+        isNewNode ||
+        node.size >= LABEL_SIZE_THRESHOLD ||
+        (hasHighlight && isRelated && node.size >= 12);
 
-    if (!showLabel) continue;
-    // 非关联且非高亮的节点在有高亮时降低标签透明度
-    let labelAlpha = 0.65;
-    if (isHighlight) labelAlpha = 1.0;
-    else if (isDimmed) labelAlpha = 0.1;
-    else if (hasHighlight && !isRelated) labelAlpha = 0.15;
+      if (!showLabel) continue;
+      // 非关联且非高亮的节点在有高亮时降低标签透明度
+      let labelAlpha = 0.65;
+      if (isHighlight) labelAlpha = 1.0;
+      else if (isDimmed) labelAlpha = 0.1;
+      else if (hasHighlight && !isRelated) labelAlpha = 0.15;
 
-    const fontSize = isHighlight ? 13 : 11;
-    ctx.font = `${isHighlight ? "600" : "400"} ${fontSize}px -apple-system, "PingFang SC", "Segoe UI", sans-serif`;
-    ctx.fillStyle = `rgba(232,234,237,${labelAlpha})`;
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 4 / transform.scale;
-    ctx.fillText(node.label, node.x, node.y + drawR + 8 / transform.scale);
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
+      const fontSize = isHighlight ? 13 : 11;
+      ctx.font = `${isHighlight ? "600" : "400"} ${fontSize}px -apple-system, "PingFang SC", "Segoe UI", sans-serif`;
+      ctx.fillStyle = `rgba(232,234,237,${labelAlpha})`;
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 4 / transform.scale;
+      ctx.fillText(node.label, node.x, node.y + drawR + 8 / transform.scale);
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+    }
   }
 
   // 6. 选中节点 / 悬停节点的关系标签

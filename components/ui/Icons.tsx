@@ -294,6 +294,135 @@ export function DownloadIcon({ className = "", size = 20, style }: IconProps) {
   );
 }
 
+/** 目标/聚焦图标 */
+export function TargetIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+/** 上箭头图标 */
+export function ArrowUpIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <line x1="12" y1="19" x2="12" y2="5" />
+      <polyline points="5 12 12 5 19 12" />
+    </svg>
+  );
+}
+
+/** 下箭头图标 */
+export function ArrowDownIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <polyline points="19 12 12 19 5 12" />
+    </svg>
+  );
+}
+
+/** 复制图标 */
+export function CopyIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </svg>
+  );
+}
+
+/** 左侧面板收起图标 */
+export function PanelLeftCloseIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M15 12l-3-3m3 3l-3 3" />
+    </svg>
+  );
+}
+
+/** 左侧面板展开图标 */
+export function PanelLeftOpenIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M14 12l3-3m-3 3l3 3" />
+    </svg>
+  );
+}
+
+/** 创建节点图标 */
+export function NodePlusIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+
+/** 连线/边图标 */
+export function EdgeIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+      <path d="M7 12h10" />
+    </svg>
+  );
+}
+
+/** 力导向布局图标 */
+export function ForceLayoutIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="6" cy="8" r="2" />
+      <circle cx="18" cy="8" r="2" />
+      <circle cx="12" cy="18" r="2" />
+      <path d="M8 9l3.5 7M16 9l-3.5 7M8 8h10" fill="none" />
+    </svg>
+  );
+}
+
+/** 环形布局图标 */
+export function CircleLayoutIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="12" cy="12" r="7" fill="none" />
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="18.1" cy="8.5" r="1.5" />
+      <circle cx="18.1" cy="15.5" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+      <circle cx="5.9" cy="15.5" r="1.5" />
+      <circle cx="5.9" cy="8.5" r="1.5" />
+    </svg>
+  );
+}
+
+/** 网格布局图标 */
+export function GridLayoutIcon({ className = "", size = 20, style }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} className={className} style={style} aria-hidden>
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="12" cy="6" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="6" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="12" cy="18" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </svg>
+  );
+}
+
 /** 图标名称到组件的映射 */
 export const ICON_MAP = {
   sparkle: SparkleIcon,

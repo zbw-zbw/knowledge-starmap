@@ -54,13 +54,13 @@ export default function ConfirmDialog({
         <div className="mt-6 flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm font-medium text-star-white transition-all hover:bg-space-700/60 active:scale-95"
+            className="flex-1 rounded-xl border border-space-500 px-4 py-2.5 text-sm whitespace-nowrap font-medium text-star-white transition-all hover:bg-space-700/60 active:scale-95"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-red-500 active:scale-95"
+            className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm whitespace-nowrap font-medium text-white transition-all hover:bg-red-500 active:scale-95"
           >
             {confirmText}
           </button>
